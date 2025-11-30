@@ -29,7 +29,7 @@ export default function CreateAuctionPage(): JSX.Element {
 
   // Load my players from realtime API
   useEffect(() => {
-    const load = async (): Promise<void> {
+    const load = async (): Promise<void> => {
       try {
         const res = await fetch(`/api/players/mine`, { cache: 'no-store' });
         const data = await res.json();
