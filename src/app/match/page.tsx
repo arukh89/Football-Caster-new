@@ -5,6 +5,7 @@ import { Play, Pause, SkipForward, Trophy, Activity, Cloud, CloudRain, CloudSnow
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { GlassCard } from '@/components/glass/GlassCard';
+import { StatPill } from '@/components/glass/StatPill';
 import { Navigation, DesktopNav } from '@/components/Navigation';
 import { MatchField } from '@/components/match/MatchField';
 import { MatchCommentary } from '@/components/match/MatchCommentary';
@@ -15,6 +16,10 @@ import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 export default function MatchPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [myPlayers, setMyPlayers] = useState<any[] | null>(null);
+  const [opponentPlayers, setOpponentPlayers] = useState<any[] | null>(null);
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+  const [currentMatchStatus, setCurrentMatchStatus] = useState<'pending' | 'active' | 'finalized' | null>(null);
+  const [submitted, setSubmitted] = useState<boolean>(false);
   const [simulator, setSimulator] = useState<MatchSimulator | null>(null);
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -35,7 +40,74 @@ export default function MatchPage(): JSX.Element {
     })();
   }, [identity?.fid]);
 
-  // No demo: do not initialize a simulator until a real opponent is present
+  // Poll current PvP match and opponent roster
+  useEffect(() => {
+    if (!identity?.fid) return;
+    let t: any;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/pvp/current', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.match) {
+          setCurrentMatchId(null);
+          setCurrentMatchStatus(null);
+          setOpponentPlayers(null);
+          return;
+        }
+        setCurrentMatchId(data.match.id as string);
+        setCurrentMatchStatus((data.match.status || (data.match.pending ? 'pending' : null)) as any);
+        setOpponentPlayers(Array.isArray(data.opponent?.players) ? data.opponent.players : []);
+      } catch (e) {
+        console.error('poll pvp/current failed', e);
+      }
+    };
+    void poll();
+    t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  }, [identity?.fid]);
+
+  // Initialize simulator when both teams ready and match is active
+  useEffect(() => {
+    if (!myPlayers || !opponentPlayers) return;
+    if ((myPlayers?.length || 0) < 11) return;
+    if ((opponentPlayers?.length || 0) < 11) return;
+    if (currentMatchStatus !== 'active') return;
+
+    const pick11 = (ps: any[]) => (ps || []).slice().sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 11);
+    const toLineup = (ps: any[]) =>
+      pick11(ps).map((p) => ({
+        id: String(p.playerId),
+        name: String(p.name || 'Player'),
+        position: String(p.position || 'MID'),
+        rating: Number(p.rating || 70),
+        stamina: 100,
+        morale: Number(p.morale || 70),
+        attributes: p.attributes || { pace: 60, shooting: 60, passing: 60, dribbling: 60, defending: 60, physical: 60 },
+      }));
+
+    const homeTeam = {
+      name: 'Your Club',
+      formation: '4-3-3',
+      lineup: toLineup(myPlayers),
+      tactics: { mentality: 'balanced', width: 'normal', tempo: 'normal', pressing: 'medium' } as MatchTactics,
+      chemistry: 70,
+    };
+    const awayTeam = {
+      name: 'Opponent',
+      formation: '4-3-3',
+      lineup: toLineup(opponentPlayers),
+      tactics: { mentality: 'balanced', width: 'normal', tempo: 'normal', pressing: 'medium' } as MatchTactics,
+      chemistry: 70,
+    };
+
+    const sim = new MatchSimulator(homeTeam, awayTeam);
+    sim.onStateChange((s) => setMatchState(s));
+    setSimulator(sim);
+    setMatchState(sim.getState());
+    setIsPlaying(false);
+    setSubmitted(false);
+  }, [myPlayers, opponentPlayers, currentMatchStatus]);
 
   // Auto-play timer
   useEffect(() => {
@@ -50,6 +122,34 @@ export default function MatchPage(): JSX.Element {
 
     return () => clearInterval(interval);
   }, [simulator, isPlaying, speed]);
+
+  // Auto submit result on full-time
+  useEffect(() => {
+    if (!currentMatchId || !matchState) return;
+    if (submitted) return;
+    if (matchState.minute < 90) return;
+    (async () => {
+      try {
+        const payload = {
+          home: matchState.homeScore,
+          away: matchState.awayScore,
+          stats: {
+            possession: matchState.possession,
+            shots: matchState.shots,
+            shotsOnTarget: matchState.shotsOnTarget,
+            corners: matchState.corners,
+            fouls: matchState.fouls,
+            yellowCards: matchState.yellowCards,
+            redCards: matchState.redCards,
+          },
+        };
+        await fetch('/api/pvp/submit_result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: currentMatchId, result: payload }) });
+        setSubmitted(true);
+      } catch (e) {
+        console.error('submit_result failed', e);
+      }
+    })();
+  }, [matchState, currentMatchId, submitted]);
 
   const handlePlayPause = useCallback((): void => {
     if (!simulator) return;
@@ -103,8 +203,8 @@ export default function MatchPage(): JSX.Element {
     );
   }
 
-  // Gate: wait for a real opponent before starting a match
-  const hasOpponent = false; // integrate PvP challenge/accept to populate an opponent
+  // Gate: wait for real opponent
+  const hasOpponent = currentMatchStatus === 'active' && !!opponentPlayers && opponentPlayers.length >= 11;
   if (myPlayers && myPlayers.length >= 11 && !hasOpponent) {
     return (
       <>
@@ -112,8 +212,8 @@ export default function MatchPage(): JSX.Element {
         <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8 flex items-center justify-center">
           <GlassCard className="p-6 max-w-md text-center">
             <Trophy className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-            <div className="font-bold text-lg mb-1">No opponent yet</div>
-            <div className="text-sm text-muted-foreground mb-4">Find an opponent or set your lineup before starting a match.</div>
+            <div className="font-bold text-lg mb-1">{currentMatchStatus === 'pending' ? 'Waiting for opponent to accept' : 'No opponent yet'}</div>
+            <div className="text-sm text-muted-foreground mb-4">{currentMatchStatus === 'pending' ? 'Your challenge is pending. We’ll start once accepted.' : 'Find an opponent or set your lineup before starting a match.'}</div>
             <div className="flex gap-2 justify-center">
               <a href="/lineup"><Button>Set Lineup</Button></a>
               <a href="/"><Button variant="outline">Home</Button></a>
