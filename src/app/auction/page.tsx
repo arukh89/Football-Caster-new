@@ -33,7 +33,11 @@ export default function AuctionPage(): React.JSX.Element {
       const data = await res.json();
       setAuctions((data.auctions || []) as Auction[]);
       setLastUpdated(Date.now());
-    } catch {}
+      setError(null);
+    } catch (e) {
+      console.error('Failed to load auctions', e);
+      setError('Failed to load auctions');
+    }
     finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, []);

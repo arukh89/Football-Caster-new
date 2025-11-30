@@ -172,6 +172,29 @@ fn append_event(ctx: &ReducerContext, ty: &str, actor_fid: i64, payload_json: St
     e
 }
 
+fn have_pending_pvp_between(ctx: &ReducerContext, a: i64, b: i64) -> bool {
+    // Naive scan for existing pending challenge between the same pair (either direction)
+    // Acceptable for small datasets; replace with indexed lookup if available in future.
+    let tbl = ctx.db().pvp_match();
+    // SAFETY: Table iteration is deterministic within reducer execution.
+    for m in tbl.iter() {
+        if m.status == "pending" &&
+           ((m.challenger_fid == a && m.challenged_fid == b) || (m.challenger_fid == b && m.challenged_fid == a)) {
+            return true;
+        }
+    }
+    false
+}
+
+fn validate_pvp_result_json(json: &str) -> Result<(), &'static str> {
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|_| "invalid_json")?;
+    let home = v.get("home").and_then(|x| x.as_i64()).ok_or("missing_home")?;
+    let away = v.get("away").and_then(|x| x.as_i64()).ok_or("missing_away")?;
+    if home < 0 || away < 0 { return Err("negative_score"); }
+    if home > 20 || away > 20 { return Err("score_out_of_range"); }
+    Ok(())
+}
+
 #[reducer]
 pub fn link_wallet(ctx: &ReducerContext, fid: i64, address: String) {
     let now = now_ms(ctx);
@@ -306,7 +329,7 @@ pub fn inbox_mark_read(ctx: &ReducerContext, fid: i64, msg_ids_json: String) {
 #[reducer]
 pub fn pvp_create_challenge(ctx: &ReducerContext, challenger_fid: i64, challenged_fid: i64) {
     if challenger_fid == challenged_fid { panic!("same_fid"); }
-    // Naive duplicate prevention could be implemented by scanning pvp_match, but SQL query is not available in this SDK version.
+    if have_pending_pvp_between(ctx, challenger_fid, challenged_fid) { panic!("duplicate_pending"); }
     let id = new_id(ctx, "pvp", &format!("{}:{}", challenger_fid, challenged_fid));
     let m = PvpMatch { id: id.clone(), challenger_fid, challenged_fid, status: "pending".into(), created_at_ms: now_ms(ctx), accepted_at_ms: None, result_json: None };
     ctx.db().pvp_match().insert(m);
@@ -332,6 +355,7 @@ pub fn pvp_submit_result(ctx: &ReducerContext, match_id: String, reporter_fid: i
     let mut m = tbl.id().find(&match_id).ok_or("match_not_found").unwrap();
     if m.status != "active" { panic!("invalid_state"); }
     if reporter_fid != m.challenger_fid && reporter_fid != m.challenged_fid { panic!("not_participant"); }
+    if let Err(code) = validate_pvp_result_json(&result_json) { panic!(code); }
     m.status = "finalized".into();
     m.result_json = Some(result_json.clone());
     tbl.id().update(m.clone());

@@ -18,6 +18,7 @@ export default function MarketPage(): JSX.Element {
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Load listings from realtime API
   const refresh = async (): Promise<void> => {
     try {
@@ -26,7 +27,11 @@ export default function MarketPage(): JSX.Element {
       const data = await res.json();
       setListings((data.listings || []) as any[]);
       setLastUpdated(Date.now());
-    } catch {}
+      setLoadError(null);
+    } catch (e) {
+      console.error('Failed to load listings', e);
+      setLoadError('Failed to load listings');
+    }
     finally { setLoading(false); }
   };
 
@@ -153,7 +158,12 @@ export default function MarketPage(): JSX.Element {
               </div>
             </div>
 
-            {loading ? (
+            {loadError ? (
+              <GlassCard className="text-center py-12">
+                <div className="text-lg font-semibold mb-1">{loadError}</div>
+                <div className="text-sm text-muted-foreground">Please try again.</div>
+              </GlassCard>
+            ) : loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <GlassCard key={i} className="p-4 animate-pulse">
