@@ -7,6 +7,7 @@ import { Providers } from '@/providers/Providers';
 import FarcasterWrapper from "@/components/FarcasterWrapper";
 import { StarterExperience } from '@/providers/StarterExperience';
 import { PvpNotifier } from '@/components/pvp/PvpNotifier';
+import { Toaster } from 'sonner';
 
 export default function RootLayout({
   children,
@@ -25,6 +26,7 @@ export default function RootLayout({
                       <FarcasterWrapper>
                         {children}
                         <PvpNotifier />
+                        <Toaster richColors position="top-center" closeButton />
                       </FarcasterWrapper>
                     </div>
                   </StarterExperience>

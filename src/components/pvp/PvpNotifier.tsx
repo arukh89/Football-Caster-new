@@ -3,6 +3,7 @@
 import * as React from "react";
 import { GlassCard } from "@/components/glass/GlassCard";
 import { Button } from "@/components/ui/button";
+import { toast } from 'sonner';
 
 type InboxMsg = { id: string; type: string | null; title: string; body: string; createdAtMs: number };
 
@@ -24,9 +25,15 @@ export function PvpNotifier(): JSX.Element | null {
   }, []);
 
   React.useEffect(() => {
-    const t = setInterval(poll, 8000);
+    const onFocus = () => { void poll(); };
+    const onVis = () => { if (!document.hidden) void poll(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
     void poll();
-    return () => clearInterval(t);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [poll]);
 
   const accept = async (): Promise<void> => {
@@ -36,12 +43,13 @@ export function PvpNotifier(): JSX.Element | null {
       const matchId = pending.id.replace('pvp-challenge-', '');
       await fetch('/api/pvp/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId }) });
       setPending(null);
+      toast.success('Match accepted');
     } finally {
       setLoading(false);
     }
   };
 
-  const decline = (): void => setPending(null);
+  const decline = (): void => { setPending(null); toast('Challenge dismissed'); };
 
   if (!pending) return null;
 

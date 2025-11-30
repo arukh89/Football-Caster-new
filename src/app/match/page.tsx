@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Play, Pause, SkipForward, Trophy, Activity, Cloud, CloudRain, CloudSnow, Wind, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -20,6 +21,8 @@ export default function MatchPage(): JSX.Element {
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [currentMatchStatus, setCurrentMatchStatus] = useState<'pending' | 'active' | 'finalized' | null>(null);
   const [submitted, setSubmitted] = useState<boolean>(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [mode, setMode] = useState<'pvp' | 'ai'>(() => (typeof window !== 'undefined' && (localStorage.getItem('match_mode') as 'pvp' | 'ai')) || 'pvp');
   const [simulator, setSimulator] = useState<MatchSimulator | null>(null);
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -40,32 +43,40 @@ export default function MatchPage(): JSX.Element {
     })();
   }, [identity?.fid]);
 
-  // Poll current PvP match and opponent roster
+  const pollCurrent = useCallback(async () => {
+    if (!identity?.fid || mode !== 'pvp') return;
+    try {
+      const res = await fetch('/api/pvp/current', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.match) {
+        setCurrentMatchId(null);
+        setCurrentMatchStatus(null);
+        setOpponentPlayers(null);
+        setLastUpdated(Date.now());
+        return;
+      }
+      setCurrentMatchId(data.match.id as string);
+      setCurrentMatchStatus((data.match.status || (data.match.pending ? 'pending' : null)) as any);
+      setOpponentPlayers(Array.isArray(data.opponent?.players) ? data.opponent.players : []);
+      setLastUpdated(Date.now());
+    } catch (e) {
+      // silent
+    }
+  }, [identity?.fid, mode]);
+
   useEffect(() => {
     if (!identity?.fid) return;
-    let t: any;
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/pvp/current', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data?.match) {
-          setCurrentMatchId(null);
-          setCurrentMatchStatus(null);
-          setOpponentPlayers(null);
-          return;
-        }
-        setCurrentMatchId(data.match.id as string);
-        setCurrentMatchStatus((data.match.status || (data.match.pending ? 'pending' : null)) as any);
-        setOpponentPlayers(Array.isArray(data.opponent?.players) ? data.opponent.players : []);
-      } catch (e) {
-        console.error('poll pvp/current failed', e);
-      }
+    const onFocus = () => void pollCurrent();
+    const onVis = () => { if (!document.hidden) void pollCurrent(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    void pollCurrent();
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
     };
-    void poll();
-    t = setInterval(poll, 5000);
-    return () => clearInterval(t);
-  }, [identity?.fid]);
+  }, [identity?.fid, pollCurrent]);
 
   // Initialize simulator when both teams ready and match is active
   useEffect(() => {
@@ -143,13 +154,23 @@ export default function MatchPage(): JSX.Element {
             redCards: matchState.redCards,
           },
         };
-        await fetch('/api/pvp/submit_result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: currentMatchId, result: payload }) });
+        const r = await fetch('/api/pvp/submit_result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: currentMatchId, result: payload }) });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          toast.error(j?.error || 'Submit failed');
+        } else {
+          toast.success('Result submitted');
+        }
         setSubmitted(true);
       } catch (e) {
-        console.error('submit_result failed', e);
+        toast.error('Submit failed');
       }
     })();
   }, [matchState, currentMatchId, submitted]);
+
+  useEffect(() => {
+    try { localStorage.setItem('match_mode', mode); } catch {}
+  }, [mode]);
 
   const handlePlayPause = useCallback((): void => {
     if (!simulator) return;
@@ -254,7 +275,18 @@ export default function MatchPage(): JSX.Element {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Mode</span>
+                <Button size="sm" variant={mode === 'pvp' ? 'default' : 'outline'} onClick={() => setMode('pvp')}>PvP</Button>
+                <Button size="sm" variant={mode === 'ai' ? 'default' : 'outline'} onClick={() => setMode('ai')}>AI</Button>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void pollCurrent()} disabled={mode !== 'pvp'}>
+                Refresh status
+              </Button>
+              {lastUpdated && (
+                <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
+              )}
               {getWeatherIcon(matchState.weather)}
               <span className="text-sm font-medium capitalize">{matchState.weather}</span>
             </div>
