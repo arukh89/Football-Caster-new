@@ -56,6 +56,11 @@ export const finalizeAuctionSchema = z.object({
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
+export const buyNowAuctionSchema = z.object({
+  auctionId: z.string().uuid(),
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+});
+
 // ========== INBOX ==========
 
 export const markReadSchema = z.object({

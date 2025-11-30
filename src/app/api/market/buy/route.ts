@@ -41,6 +41,9 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     if (!seller) {
       return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
     }
+    if (!seller.wallet) {
+      return NextResponse.json({ error: 'Seller has no linked wallet' }, { status: 400 });
+    }
 
     // Verify FBC transfer
     const verification = await verifyFBCTransferExact(

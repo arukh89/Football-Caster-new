@@ -1,22 +1,21 @@
 /**
- * POST /api/auctions/finalize
- * Finalize auction after winner payment
+ * POST /api/auctions/buy-now
+ * Buy-now flow with on-chain payment verification
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Address, Hash } from 'viem';
-import { stGetAuction, stGetUser, stFinalizeAuction } from '@/lib/spacetime/api';
+import { stGetAuction, stGetUser, stBuyNow } from '@/lib/spacetime/api';
 import { verifyFBCTransferExact } from '@/lib/services/verification';
-import { validate, finalizeAuctionSchema } from '@/lib/middleware/validation';
+import { validate, buyNowAuctionSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   try {
     const body = await req.json();
-    const validation = validate(finalizeAuctionSchema, body);
+    const validation = validate(buyNowAuctionSchema, body);
 
     if (!validation.success) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
@@ -27,22 +26,17 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
 
     // Get auction
     const auction = await stGetAuction(auctionId);
-    if (!auction) {
-      return NextResponse.json({ error: 'Auction not found' }, { status: 404 });
+    if (!auction || auction.status !== 'active') {
+      return NextResponse.json({ error: 'Auction not found or not active' }, { status: 404 });
     }
 
-    // Must be awaiting payment (auction ended but not finalized)
-    if (auction.status !== 'awaiting_payment') {
-      return NextResponse.json({ error: 'Auction not awaiting payment' }, { status: 400 });
+    if (!auction.buyNowWei) {
+      return NextResponse.json({ error: 'Buy-now not available' }, { status: 400 });
     }
 
-    // Must be winner
-    if (auction.topBidderFid !== fid) {
-      return NextResponse.json({ error: 'Only winner can finalize' }, { status: 403 });
-    }
-
-    if (!auction.topBidWei) {
-      return NextResponse.json({ error: 'No winning bid' }, { status: 400 });
+    // Can't buy own auction
+    if (auction.sellerFid === fid) {
+      return NextResponse.json({ error: 'Cannot buy own auction' }, { status: 400 });
     }
 
     // Get seller wallet
@@ -54,12 +48,12 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       return NextResponse.json({ error: 'Seller has no linked wallet' }, { status: 400 });
     }
 
-    // Verify payment
+    // Verify buy-now payment
     const verification = await verifyFBCTransferExact(
       txHash as Hash,
       wallet as Address,
       seller.wallet as Address,
-      auction.topBidWei
+      auction.buyNowWei
     );
 
     if (!verification.valid) {
@@ -69,14 +63,14 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       );
     }
 
-    // Finalize auction via reducer (handles event + transfer + inbox internally)
-    await stFinalizeAuction(auctionId, fid);
+    // Perform buy-now via reducer (handles finalize + transfer)
+    await stBuyNow(auctionId, fid, auction.buyNowWei);
 
-    return NextResponse.json({ success: true, itemId: auction.itemId });
+    return NextResponse.json({ success: true, status: 'buy_now', auctionId });
   } catch (error) {
-    console.error('Finalize auction error:', error);
+    console.error('Buy-now error:', error);
     return NextResponse.json(
-      { error: 'Failed to finalize auction' },
+      { error: 'Failed to process buy-now' },
       { status: 500 }
     );
   }

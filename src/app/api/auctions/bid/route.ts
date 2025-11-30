@@ -4,7 +4,7 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { stGetAuction, stPlaceBid, stBuyNow } from '@/lib/spacetime/api';
+import { stGetAuction, stPlaceBid } from '@/lib/spacetime/api';
 import { validate, placeBidSchema } from '@/lib/middleware/validation';
 import { requireAuth } from '@/lib/middleware/auth';
 import { randomUUID } from 'crypto';
@@ -65,10 +65,12 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
       }
     }
 
-    // Buy-now path
+    // Buy-now threshold reached -> require dedicated buy-now flow with on-chain verification
     if (auction.buyNowWei && bidAmount >= BigInt(auction.buyNowWei)) {
-      await stBuyNow(auctionId, fid, auction.buyNowWei);
-      return NextResponse.json({ success: true, status: 'buy_now', auctionId });
+      return NextResponse.json(
+        { error: 'Bid meets buy-now price. Use /api/auctions/buy-now with txHash to complete.' , buyNowWei: auction.buyNowWei },
+        { status: 409 }
+      );
     }
 
     // Place bid via reducer (handles increments + anti-snipe)
