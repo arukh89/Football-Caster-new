@@ -21,6 +21,13 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
     const { id } = await stPvpChallenge(ctx.fid, challengedFid)
     return NextResponse.json({ id })
   } catch (e) {
+    const msg = typeof e === 'string' ? e : (e as any)?.message || ''
+    if (msg && String(msg).includes('duplicate_pending')) {
+      return NextResponse.json({ error: 'duplicate_pending' }, { status: 409 })
+    }
+    if (msg && String(msg).includes('same_fid')) {
+      return NextResponse.json({ error: 'same_fid' }, { status: 400 })
+    }
     console.error('pvp/challenge error', e)
     return NextResponse.json({ error: 'internal' }, { status: 500 })
   }
