@@ -4,33 +4,22 @@ import { env } from 'process';
 const DEFAULT_URI = env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI || 'wss://maincloud.spacetimedb.com';
 const DEFAULT_DB_NAME = env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || 'football-caster-new';
 
-// Lazy import so client bundles don't include Node-only modules
+// Lazy, singleton connection built from generated bindings
 let _client: any | null = null;
 
-export class SpacetimeClientBuilder {
-  private _uri: string = DEFAULT_URI;
-  private _dbName: string = DEFAULT_DB_NAME;
-  private _token: string | null = null;
-
-  uri(v: string): this { this._uri = v; return this; }
-  database(v: string): this { this._dbName = v; return this; }
-  token(v: string): this { this._token = v; return this; }
-
-  async connect(): Promise<any> {
-    const st = await import('spacetimedb').catch(() => null as any);
-    if (!st) throw new Error('spacetimedb package not installed');
-    const conn = await st.connect(this._uri, this._dbName);
-    return conn;
-  }
-}
-
-export function clientBuilder(): SpacetimeClientBuilder {
-  return new SpacetimeClientBuilder();
+async function buildConnection() {
+  const dynamicImport = (Function('return import')() as unknown) as <T = any>(path: string) => Promise<T>;
+  const { DbConnection } = await dynamicImport('@/spacetime_module_bindings');
+  const conn = await DbConnection.builder()
+    .withUri(DEFAULT_URI)
+    .withDatabase(DEFAULT_DB_NAME)
+    .connect();
+  return conn;
 }
 
 export async function getSpacetime() {
   if (_client) return _client;
-  const conn = await clientBuilder().connect();
+  const conn = await buildConnection();
   _client = conn;
   return conn;
 }
@@ -39,7 +28,6 @@ export function getEnv() {
   return { URI: DEFAULT_URI, DB_NAME: DEFAULT_DB_NAME };
 }
 
-// Placeholder typed helpers – replaced by generated bindings later
 export async function reducers() {
   const st = await getSpacetime();
   return st.reducers as any;
@@ -48,5 +36,5 @@ export async function reducers() {
 export type ReducerCall<TArgs extends any[] = any[], TRes = any> = (...args: TArgs) => Promise<TRes>;
 
 export const tables = {
-  // Populated by generated bindings; using any to avoid build errors pre-codegen
+  // Access via generated bindings if needed
 } as any;

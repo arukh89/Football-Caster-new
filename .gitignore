@@ -8,6 +8,7 @@ pnpm-debug.log*
 tsconfig.tsbuildinfo
 .env*
 .DS_Store
+reliability-droid-report.html
 
 # Rust
 spacetime-server/rust/**/target/

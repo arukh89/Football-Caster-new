@@ -8,12 +8,12 @@
   "miniapp": {
     "name": "Football Caster",
     "homeUrl": "https://football-caster-new.vercel.app",
-    "iconUrl": "https://football-caster-new.vercel.app/icon.jpg",
-    "splashImageUrl": "https://football-caster-new.vercel.app/preview.jpg",
+    "iconUrl": "https://football-caster-new.vercel.app/icon.png",
+    "splashImageUrl": "https://football-caster-new.vercel.app/splash.png",
     "splashBackgroundColor": "#ffffff",
     "screenshotUrls": [
-      "https://football-caster-new.vercel.app/preview.jpg",
-      "https://football-caster-new.vercel.app/thumbnail.jpg"
+      "https://football-caster-new.vercel.app/preview.png",
+      "https://football-caster-new.vercel.app/thumbnail.png"
     ],
     "requiredChains": ["eip155:8453"],
     "capabilities": { "wallet.getEthereumProvider": true }
