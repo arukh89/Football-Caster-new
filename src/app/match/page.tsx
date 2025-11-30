@@ -16,6 +16,10 @@ import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 export default function MatchPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [myPlayers, setMyPlayers] = useState<any[] | null>(null);
+  const [opponentPlayers, setOpponentPlayers] = useState<any[] | null>(null);
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+  const [currentMatchStatus, setCurrentMatchStatus] = useState<'pending' | 'active' | 'finalized' | null>(null);
+  const [submitted, setSubmitted] = useState<boolean>(false);
   const [simulator, setSimulator] = useState<MatchSimulator | null>(null);
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -36,67 +40,74 @@ export default function MatchPage(): JSX.Element {
     })();
   }, [identity?.fid]);
 
-  // Initialize match
+  // Poll current PvP match and opponent roster
   useEffect(() => {
-    const homeTeam = {
-      name: 'Home FC',
-      formation: '442',
-      chemistry: 75,
-      tactics: {
-        mentality: 'balanced' as const,
-        width: 'normal' as const,
-        tempo: 'normal' as const,
-        pressing: 'medium' as const,
-      },
-      lineup: [
-        { id: '1', name: 'John Keeper', position: 'GK', rating: 78, stamina: 100, morale: 80, attributes: { pace: 50, shooting: 30, passing: 60, dribbling: 40, defending: 85, physical: 75 } },
-        { id: '2', name: 'Alex Defender', position: 'DEF', rating: 75, stamina: 100, morale: 75, attributes: { pace: 65, shooting: 40, passing: 65, dribbling: 50, defending: 85, physical: 80 } },
-        { id: '3', name: 'Ben Strong', position: 'DEF', rating: 77, stamina: 100, morale: 78, attributes: { pace: 62, shooting: 38, passing: 68, dribbling: 48, defending: 87, physical: 85 } },
-        { id: '4', name: 'Chris Rock', position: 'DEF', rating: 76, stamina: 100, morale: 77, attributes: { pace: 68, shooting: 45, passing: 70, dribbling: 55, defending: 83, physical: 78 } },
-        { id: '5', name: 'Dan Wall', position: 'DEF', rating: 74, stamina: 100, morale: 76, attributes: { pace: 63, shooting: 42, passing: 67, dribbling: 52, defending: 84, physical: 82 } },
-        { id: '6', name: 'Eric Pass', position: 'MID', rating: 80, stamina: 100, morale: 82, attributes: { pace: 72, shooting: 70, passing: 85, dribbling: 75, defending: 65, physical: 68 } },
-        { id: '7', name: 'Frank Speed', position: 'MID', rating: 79, stamina: 100, morale: 81, attributes: { pace: 85, shooting: 68, passing: 78, dribbling: 80, defending: 60, physical: 65 } },
-        { id: '8', name: 'George Control', position: 'MID', rating: 78, stamina: 100, morale: 79, attributes: { pace: 70, shooting: 72, passing: 82, dribbling: 78, defending: 68, physical: 70 } },
-        { id: '9', name: 'Harry Vision', position: 'MID', rating: 77, stamina: 100, morale: 78, attributes: { pace: 74, shooting: 75, passing: 80, dribbling: 76, defending: 62, physical: 66 } },
-        { id: '10', name: 'Ivan Strike', position: 'FWD', rating: 82, stamina: 100, morale: 85, attributes: { pace: 88, shooting: 88, passing: 72, dribbling: 82, defending: 40, physical: 72 } },
-        { id: '11', name: 'Jack Goal', position: 'FWD', rating: 81, stamina: 100, morale: 83, attributes: { pace: 86, shooting: 86, passing: 70, dribbling: 80, defending: 38, physical: 70 } },
-      ],
+    if (!identity?.fid) return;
+    let t: any;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/pvp/current', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.match) {
+          setCurrentMatchId(null);
+          setCurrentMatchStatus(null);
+          setOpponentPlayers(null);
+          return;
+        }
+        setCurrentMatchId(data.match.id as string);
+        setCurrentMatchStatus((data.match.status || (data.match.pending ? 'pending' : null)) as any);
+        setOpponentPlayers(Array.isArray(data.opponent?.players) ? data.opponent.players : []);
+      } catch (e) {
+        console.error('poll pvp/current failed', e);
+      }
     };
+    void poll();
+    t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  }, [identity?.fid]);
 
+  // Initialize simulator when both teams ready and match is active
+  useEffect(() => {
+    if (!myPlayers || !opponentPlayers) return;
+    if ((myPlayers?.length || 0) < 11) return;
+    if ((opponentPlayers?.length || 0) < 11) return;
+    if (currentMatchStatus !== 'active') return;
+
+    const pick11 = (ps: any[]) => (ps || []).slice().sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 11);
+    const toLineup = (ps: any[]) =>
+      pick11(ps).map((p) => ({
+        id: String(p.playerId),
+        name: String(p.name || 'Player'),
+        position: String(p.position || 'MID'),
+        rating: Number(p.rating || 70),
+        stamina: 100,
+        morale: Number(p.morale || 70),
+        attributes: p.attributes || { pace: 60, shooting: 60, passing: 60, dribbling: 60, defending: 60, physical: 60 },
+      }));
+
+    const homeTeam = {
+      name: 'Your Club',
+      formation: '4-3-3',
+      lineup: toLineup(myPlayers),
+      tactics: { mentality: 'balanced', width: 'normal', tempo: 'normal', pressing: 'medium' } as MatchTactics,
+      chemistry: 70,
+    };
     const awayTeam = {
-      name: 'Away United',
-      formation: '433',
-      chemistry: 72,
-      tactics: {
-        mentality: 'balanced' as const,
-        width: 'normal' as const,
-        tempo: 'normal' as const,
-        pressing: 'medium' as const,
-      },
-      lineup: [
-        { id: 'a1', name: 'Mike Glove', position: 'GK', rating: 76, stamina: 100, morale: 78, attributes: { pace: 48, shooting: 28, passing: 58, dribbling: 38, defending: 83, physical: 73 } },
-        { id: 'a2', name: 'Nick Block', position: 'DEF', rating: 74, stamina: 100, morale: 74, attributes: { pace: 64, shooting: 38, passing: 64, dribbling: 48, defending: 84, physical: 79 } },
-        { id: 'a3', name: 'Oscar Solid', position: 'DEF', rating: 76, stamina: 100, morale: 76, attributes: { pace: 61, shooting: 36, passing: 67, dribbling: 47, defending: 86, physical: 84 } },
-        { id: 'a4', name: 'Paul Tackle', position: 'DEF', rating: 75, stamina: 100, morale: 75, attributes: { pace: 67, shooting: 44, passing: 69, dribbling: 54, defending: 82, physical: 77 } },
-        { id: 'a5', name: 'Quinn Engine', position: 'MID', rating: 79, stamina: 100, morale: 80, attributes: { pace: 71, shooting: 69, passing: 84, dribbling: 74, defending: 64, physical: 67 } },
-        { id: 'a6', name: 'Ryan Dynamo', position: 'MID', rating: 78, stamina: 100, morale: 79, attributes: { pace: 84, shooting: 67, passing: 77, dribbling: 79, defending: 59, physical: 64 } },
-        { id: 'a7', name: 'Sam Creator', position: 'MID', rating: 77, stamina: 100, morale: 78, attributes: { pace: 69, shooting: 71, passing: 81, dribbling: 77, defending: 67, physical: 69 } },
-        { id: 'a8', name: 'Tom Finisher', position: 'FWD', rating: 80, stamina: 100, morale: 82, attributes: { pace: 87, shooting: 87, passing: 71, dribbling: 81, defending: 39, physical: 71 } },
-        { id: 'a9', name: 'Uma Pacey', position: 'FWD', rating: 79, stamina: 100, morale: 81, attributes: { pace: 90, shooting: 82, passing: 68, dribbling: 85, defending: 35, physical: 65 } },
-        { id: 'a10', name: 'Victor Sharp', position: 'FWD', rating: 78, stamina: 100, morale: 80, attributes: { pace: 85, shooting: 84, passing: 69, dribbling: 79, defending: 37, physical: 68 } },
-        { id: 'a11', name: 'Will Wing', position: 'MID', rating: 76, stamina: 100, morale: 77, attributes: { pace: 82, shooting: 65, passing: 75, dribbling: 80, defending: 58, physical: 63 } },
-      ],
+      name: 'Opponent',
+      formation: '4-3-3',
+      lineup: toLineup(opponentPlayers),
+      tactics: { mentality: 'balanced', width: 'normal', tempo: 'normal', pressing: 'medium' } as MatchTactics,
+      chemistry: 70,
     };
 
     const sim = new MatchSimulator(homeTeam, awayTeam);
-    
-    sim.onStateChange((state) => {
-      setMatchState(state);
-    });
-
+    sim.onStateChange((s) => setMatchState(s));
     setSimulator(sim);
     setMatchState(sim.getState());
-  }, []);
+    setIsPlaying(false);
+    setSubmitted(false);
+  }, [myPlayers, opponentPlayers, currentMatchStatus]);
 
   // Auto-play timer
   useEffect(() => {
@@ -111,6 +122,34 @@ export default function MatchPage(): JSX.Element {
 
     return () => clearInterval(interval);
   }, [simulator, isPlaying, speed]);
+
+  // Auto submit result on full-time
+  useEffect(() => {
+    if (!currentMatchId || !matchState) return;
+    if (submitted) return;
+    if (matchState.minute < 90) return;
+    (async () => {
+      try {
+        const payload = {
+          home: matchState.homeScore,
+          away: matchState.awayScore,
+          stats: {
+            possession: matchState.possession,
+            shots: matchState.shots,
+            shotsOnTarget: matchState.shotsOnTarget,
+            corners: matchState.corners,
+            fouls: matchState.fouls,
+            yellowCards: matchState.yellowCards,
+            redCards: matchState.redCards,
+          },
+        };
+        await fetch('/api/pvp/submit_result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: currentMatchId, result: payload }) });
+        setSubmitted(true);
+      } catch (e) {
+        console.error('submit_result failed', e);
+      }
+    })();
+  }, [matchState, currentMatchId, submitted]);
 
   const handlePlayPause = useCallback((): void => {
     if (!simulator) return;
@@ -155,6 +194,28 @@ export default function MatchPage(): JSX.Element {
             <div className="text-sm text-muted-foreground mb-4">Claim the Starter Pack or acquire players from the market.</div>
             <div className="flex gap-2 justify-center">
               <a href="/transfer"><Button>Market</Button></a>
+              <a href="/"><Button variant="outline">Home</Button></a>
+            </div>
+          </GlassCard>
+        </div>
+        <Navigation />
+      </>
+    );
+  }
+
+  // Gate: wait for real opponent
+  const hasOpponent = currentMatchStatus === 'active' && !!opponentPlayers && opponentPlayers.length >= 11;
+  if (myPlayers && myPlayers.length >= 11 && !hasOpponent) {
+    return (
+      <>
+        <DesktopNav />
+        <div className="min-h-screen mobile-safe md:pt-20 pb-20 md:pb-8 flex items-center justify-center">
+          <GlassCard className="p-6 max-w-md text-center">
+            <Trophy className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+            <div className="font-bold text-lg mb-1">{currentMatchStatus === 'pending' ? 'Waiting for opponent to accept' : 'No opponent yet'}</div>
+            <div className="text-sm text-muted-foreground mb-4">{currentMatchStatus === 'pending' ? 'Your challenge is pending. We’ll start once accepted.' : 'Find an opponent or set your lineup before starting a match.'}</div>
+            <div className="flex gap-2 justify-center">
+              <a href="/lineup"><Button>Set Lineup</Button></a>
               <a href="/"><Button variant="outline">Home</Button></a>
             </div>
           </GlassCard>
