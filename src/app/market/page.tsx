@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ShoppingBag, Filter, Search, TrendingUp } from 'lucide-react';
+import { ShoppingBag, Filter, Search, TrendingUp, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,16 +16,27 @@ import { useFarcasterIdentity } from '@/hooks/useFarcasterIdentity';
 export default function MarketPage(): JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [listings, setListings] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   // Load listings from realtime API
+  const refresh = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/market/listings', { cache: 'no-store' });
+      const data = await res.json();
+      setListings((data.listings || []) as any[]);
+      setLastUpdated(Date.now());
+    } catch {}
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { void refresh(); }, []);
   useEffect(() => {
-    const load = async (): Promise<void> => {
-      try {
-        const res = await fetch('/api/market/listings', { cache: 'no-store' });
-        const data = await res.json();
-        setListings((data.listings || []) as any[]);
-      } catch {}
-    };
-    void load();
+    const onFocus = () => void refresh();
+    const onVis = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); };
   }, []);
   
   const [search, setSearch] = useState<string>('');
@@ -56,12 +67,21 @@ export default function MarketPage(): JSX.Element {
                 </p>
               </div>
             </div>
-            <Link href="/market/list">
-              <Button className="gap-2">
-                <TrendingUp className="h-4 w-4" />
-                List Player
+            <div className="flex items-center gap-2">
+              <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
+              {lastUpdated && (
+                <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
+              )}
+              <Button variant="outline" className="gap-2" onClick={() => void refresh()} disabled={loading}>
+                <RefreshCw className="h-4 w-4" /> Refresh
               </Button>
-            </Link>
+              <Link href="/market/list">
+                <Button className="gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  List Player
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Filters */}
@@ -133,7 +153,17 @@ export default function MarketPage(): JSX.Element {
               </div>
             </div>
 
-            {filteredListings.length === 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <GlassCard key={i} className="p-4 animate-pulse">
+                    <div className="h-4 w-1/2 bg-muted rounded mb-4" />
+                    <div className="h-3 w-1/3 bg-muted rounded mb-6" />
+                    <div className="h-10 w-full bg-muted rounded" />
+                  </GlassCard>
+                ))}
+              </div>
+            ) : filteredListings.length === 0 ? (
               <GlassCard className="text-center py-12">
                 <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                 <div className="text-lg font-semibold mb-1">No listings found</div>

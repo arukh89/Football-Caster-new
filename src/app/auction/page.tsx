@@ -3,7 +3,7 @@
 import type React from 'react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Gavel, Plus, Clock, Zap } from 'lucide-react';
+import { Gavel, Plus, Clock, Zap, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GlassCard } from '@/components/glass/GlassCard';
@@ -20,19 +20,29 @@ import { payInFBC } from '@/lib/wallet-utils';
 export default function AuctionPage(): React.JSX.Element {
   const { identity } = useFarcasterIdentity();
   const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const { wallet, walletClient, publicClient, connect, isCorrectChain, switchToBase } = useWallet();
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Load auctions from realtime API
+  const refresh = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/auctions', { cache: 'no-store' });
+      const data = await res.json();
+      setAuctions((data.auctions || []) as Auction[]);
+      setLastUpdated(Date.now());
+    } catch {}
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void refresh(); }, []);
   useEffect(() => {
-    const load = async (): Promise<void> => {
-      try {
-        const res = await fetch('/api/auctions', { cache: 'no-store' });
-        const data = await res.json();
-        setAuctions((data.auctions || []) as Auction[]);
-      } catch {}
-    };
-    void load();
+    const onFocus = () => void refresh();
+    const onVis = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); };
   }, []);
   
   const [activeTab, setActiveTab] = useState<string>('active');
@@ -41,13 +51,7 @@ export default function AuctionPage(): React.JSX.Element {
   const myAuctions = activeAuctions.filter((a) => a.sellerFid === identity?.fid);
   const myBids = activeAuctions.filter((a) => a.currentBidderFid === identity?.fid);
 
-  async function refresh(): Promise<void> {
-    try {
-      const res = await fetch('/api/auctions', { cache: 'no-store' });
-      const data = await res.json();
-      setAuctions((data.auctions || []) as Auction[]);
-    } catch {}
-  }
+  async function manualRefresh(): Promise<void> { await refresh(); }
 
   const handleBuyNow = async (auction: Auction): Promise<void> => {
     try {
@@ -176,6 +180,15 @@ export default function AuctionPage(): React.JSX.Element {
               </div>
             </div>
             <Link href="/auction/create">
+              <div className="flex items-center gap-2">
+                <div className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">Live</div>
+                {lastUpdated && (
+                  <span className="text-xs text-muted-foreground">Updated {Math.floor((Date.now() - lastUpdated)/1000)}s ago</span>
+                )}
+                <Button variant="outline" className="gap-2" onClick={() => void manualRefresh()} disabled={loading}>
+                  <RefreshCw className="h-4 w-4" /> Refresh
+                </Button>
+              </div>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
                 Create Auction
@@ -216,7 +229,17 @@ export default function AuctionPage(): React.JSX.Element {
             </TabsList>
 
             <TabsContent value="active">
-              {activeAuctions.length === 0 ? (
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <GlassCard key={i} className="p-4 animate-pulse">
+                      <div className="h-4 w-1/2 bg-muted rounded mb-4" />
+                      <div className="h-3 w-1/3 bg-muted rounded mb-6" />
+                      <div className="h-10 w-full bg-muted rounded" />
+                    </GlassCard>
+                  ))}
+                </div>
+              ) : activeAuctions.length === 0 ? (
                 <GlassCard className="text-center py-12">
                   <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                   <div className="text-lg font-semibold mb-1">No Active Auctions</div>

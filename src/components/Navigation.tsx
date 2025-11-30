@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, ShoppingBag, Gavel, Inbox, Settings, Play, TrendingUp } from 'lucide-react';
+import { Home, Users, ShoppingBag, Gavel, Inbox, Settings, Play, TrendingUp, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -49,6 +51,14 @@ export function Navigation(): JSX.Element {
 
 export function DesktopNav(): JSX.Element {
   const pathname = usePathname();
+  async function checkInbox(): Promise<void> {
+    try {
+      const res = await fetch('/api/inbox?unread=true', { cache: 'no-store' });
+      const data = await res.json();
+      const count = (data?.messages || []).length;
+      toast(count > 0 ? `${count} unread message(s)` : 'Inbox up to date');
+    } catch {}
+  }
 
   return (
     <nav className="hidden md:flex fixed top-0 left-0 right-0 z-50 glass border-b border-border">
@@ -83,18 +93,23 @@ export function DesktopNav(): JSX.Element {
           })}
         </div>
 
-        <Link
-          href="/settings"
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
-            pathname === '/settings'
-              ? 'bg-emerald-500/10 text-emerald-500'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          )}
-        >
-          <Settings className="h-5 w-5" />
-          <span className="font-medium">Settings</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => void checkInbox()}>
+            <RefreshCw className="h-4 w-4" /> Check Inbox
+          </Button>
+          <Link
+            href="/settings"
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
+              pathname === '/settings'
+                ? 'bg-emerald-500/10 text-emerald-500'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            )}
+          >
+            <Settings className="h-5 w-5" />
+            <span className="font-medium">Settings</span>
+          </Link>
+        </div>
       </div>
     </nav>
   );
