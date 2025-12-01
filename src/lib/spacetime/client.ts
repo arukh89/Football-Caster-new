@@ -17,22 +17,52 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    let mod: any = null;
-    // Prefer Node's createRequire to bypass bundler transforms on the server
+    // 1) Prefer generated bindings (works across 1.8+)
     try {
-      // dynamic import to avoid including in client bundles
+      const bindings = await (Function('return import')())('@/spacetime_module_bindings');
+      if (bindings && (bindings as any).DbConnection?.builder) {
+        const conn = (bindings as any)
+          .DbConnection
+          .builder()
+          .withUri(this._uri)
+          .withModuleName(this._dbName)
+          .build();
+        return conn;
+      }
+    } catch {}
+
+    // 2) Fallback: load spacetimedb package directly
+    let mod: any = null;
+    try {
       const { createRequire } = await import('node:module');
       const req = createRequire(import.meta.url);
       mod = req('spacetimedb');
     } catch {
-      // Fallback to ESM dynamic import
       mod = await import('spacetimedb').catch(() => null as any);
     }
     if (!mod) throw new Error('spacetimedb package not installed');
+
     const connect = (mod as any).connect ?? (mod as any).default?.connect;
-    if (typeof connect !== 'function') throw new Error('spacetimedb.connect not available');
-    const conn = await connect(this._uri, this._dbName);
-    return conn;
+    if (typeof connect === 'function') {
+      return await connect(this._uri, this._dbName);
+    }
+
+    // 3) Last resort: if SDK exposes DbConnectionBuilder directly
+    const Builder = (mod as any).DbConnection?.builder
+      ? (mod as any).DbConnection
+      : (mod as any).DbConnectionBuilder;
+    if (Builder) {
+      try {
+        const conn = (Builder as any)
+          .builder?.()
+          ?.withUri(this._uri)
+          ?.withModuleName(this._dbName)
+          ?.build?.();
+        if (conn) return conn;
+      } catch {}
+    }
+
+    throw new Error('spacetimedb.connect not available');
   }
 }
 
