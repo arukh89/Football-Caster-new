@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { stHasClaimedStarter } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 async function handler(_req: NextRequest, ctx: { fid: number }): Promise<Response> {
   try {
