@@ -18,20 +18,22 @@ export class SpacetimeClientBuilder {
   token(v: string): this { this._token = v; return this; }
 
   async connect(): Promise<any> {
-    // 1) Prefer generated bindings (works across 1.8+)
-    try {
-      const bindings = await import('@/spacetime_module_bindings');
-      if (bindings && (bindings as any).DbConnection?.builder) {
-        console.info('[STDB] Using generated bindings DbConnection.builder()');
-        const conn = (bindings as any)
-          .DbConnection
-          .builder()
-          .withUri(this._uri)
-          .withModuleName(this._dbName)
-          .build();
-        return conn;
-      }
-    } catch {}
+    // 1) Prefer generated bindings (try alias then relative)
+    for (const spec of ['@/spacetime_module_bindings', '../../spacetime_module_bindings']) {
+      try {
+        const bindings = await import(spec as any);
+        if (bindings && (bindings as any).DbConnection?.builder) {
+          console.info('[STDB] Using generated bindings DbConnection.builder() from', spec);
+          const conn = (bindings as any)
+            .DbConnection
+            .builder()
+            .withUri(this._uri)
+            .withModuleName(this._dbName)
+            .build();
+          return conn;
+        }
+      } catch {}
+    }
 
     // 2) Fallback: load spacetimedb package directly
     let mod: any = null;
