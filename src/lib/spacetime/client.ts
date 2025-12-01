@@ -6,6 +6,7 @@ const DEFAULT_DB_NAME = env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUB
 
 // Lazy import so client bundles don't include Node-only modules
 let _client: any | null = null;
+let _clientPromise: Promise<any> | null = null;
 
 export class SpacetimeClientBuilder {
   private _uri: string = DEFAULT_URI;
@@ -75,9 +76,17 @@ export function clientBuilder(): SpacetimeClientBuilder {
 
 export async function getSpacetime() {
   if (_client) return _client;
-  const conn = await clientBuilder().connect();
-  _client = conn;
-  return conn;
+  if (!_clientPromise) {
+    _clientPromise = clientBuilder().connect();
+  }
+  try {
+    const conn = await _clientPromise;
+    _client = conn;
+    return conn;
+  } catch (err) {
+    _clientPromise = null; // reset on failure
+    throw err;
+  }
 }
 
 export function getEnv() {
