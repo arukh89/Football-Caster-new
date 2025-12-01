@@ -6,12 +6,12 @@
 // Minimal runtime wrapper using SDK connect() so client code can rely on DbConnection.builder() API.
 
 export class DbConnectionBuilder {
-  _uri = "wss://maincloud.spacetimedb.com";
-  _moduleName = "footballcaster2";
-  withUri(v) { this._uri = v; return this; }
-  withModuleName(v) { this._moduleName = v; return this; }
+  _uri: string = "wss://maincloud.spacetimedb.com";
+  _moduleName: string = "footballcaster2";
+  withUri(v: string) { this._uri = v; return this; }
+  withModuleName(v: string) { this._moduleName = v; return this; }
   async build() {
-    const mod = await import('spacetimedb');
+    const mod: any = await import('spacetimedb');
     const connect = mod.connect || mod.default?.connect;
     if (typeof connect !== 'function') {
       throw new Error('spacetimedb.connect not available');
