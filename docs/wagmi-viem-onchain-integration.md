@@ -16,6 +16,17 @@ Inti pipeline:
 Dokumen ini berisi langkah implementasi, snippet, serta checklist untuk klaim Starter Pack dan transaksi lain (approve, transfer, dll.).
 
 
+## Mode yang dipilih: Opsi A (kontrak klaim + pembayaran FBC di dalam claim)
+
+- Kontrak StarterClaim memverifikasi tanda tangan EIP‑712 dari server, membatasi 1x klaim per FID/wallet, memungut biaya dalam token FBC via `transferFrom` ke `TREASURY_ADDRESS`, dan men‑emit event (mis. `StarterPackGranted`).
+- Client flow: `/api/starter/prepare` → (approve/permit FBC) → `claim()` (Warplet) → `/api/starter/verify`.
+- Server memverifikasi event kontrak + keterkaitan FID/wallet, lalu memberi 18 pemain di SpacetimeDB.
+
+Catatan penting:
+- Tidak perlu deploy token FBC baru. Gunakan alamat FBC yang sudah ada di Base sebagai `NEXT_PUBLIC_FBC_ADDRESS`.
+- Jika Anda TIDAK ingin deploy kontrak StarterClaim, set `NEXT_PUBLIC_STARTER_CLAIM_ADDRESS = 0x0000000000000000000000000000000000000000` dan gunakan mode fallback tanpa kontrak (lihat §6.1).
+
+
 # 1) Dependensi & Setup Dasar
 
 Instal paket (Wagmi v2 + Viem + connector Farcaster + React Query):
@@ -245,49 +256,156 @@ Catatan: bentuk payload `calls` mengikuti implementasi wallet; mulai dari encode
 Contoh: `src/lib/abis/StarterClaim.ts`
 
 ```ts
+// Struktur minimal untuk klaim bertanda tangan + pembebanan FBC di dalam kontrak
 export const STARTER_CLAIM_ABI = [
-  { name: 'claim', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+  {
+    type: 'function',
+    name: 'claim',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'c',
+        type: 'tuple',
+        components: [
+          { name: 'fid', type: 'uint256' },
+          { name: 'wallet', type: 'address' },
+          { name: 'packHash', type: 'bytes32' },
+          { name: 'pool', type: 'uint256' },
+          { name: 'deadline', type: 'uint64' },
+        ],
+      },
+      { name: 'sig', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'event',
+    name: 'StarterPackGranted',
+    inputs: [
+      { name: 'account', type: 'address', indexed: true },
+      { name: 'fid', type: 'uint256', indexed: true },
+      { name: 'packHash', type: 'bytes32', indexed: false },
+      { name: 'pool', type: 'uint256', indexed: false },
+      { name: 'priceWei', type: 'uint256', indexed: false },
+    ],
+    anonymous: false,
+  },
 ] as const;
 ```
 
 
-# 6) Klaim Starter Pack (Wagmi + Viem)
+# 6) Klaim Starter Pack (Opsi A: kontrak klaim memungut FBC)
 
 Alur UI (client):
-1. Panggil `ensureWarpcastAndBase()` untuk menjamin Warplet + Base (8453) [2].
-2. Simulasikan fungsi klaim (atau approve/transfer FBC jika perlu biaya) [5].
-3. Kirim transaksi dan tunggu receipt [1][3].
-4. Panggil `/api/starter/verify` untuk verifikasi on‑chain (sudah tersedia di repo) → server memanggil reducer `grant_starter_pack` [server‑side].
-5. Refresh status `/api/starter/status`.
+1. `ensureWarpcastAndBase()` untuk menjamin Warplet + Base (8453) [2].
+2. Panggil `/api/starter/prepare` → server membuat 18 pemain + `packHash` dan menandatangani EIP‑712 (Claim) dengan kunci signer server. Response: `{ claim, sig, priceWei, expiry }`.
+3. Siapkan pembayaran FBC:
+   - Jika wallet mendukung EIP‑5792: batch `approve(FBC, starterClaim, priceWei)` + `claim(claim, sig)` dalam satu konfirmasi.
+   - Jika tidak: jalankan `approve` dulu, tunggu receipt, lalu `claim`.
+4. Tunggu receipt `claim` (≥2 konfirmasi) [3][6].
+5. Panggil `/api/starter/verify { txHash }` → server memverifikasi event kontrak dan grant 18 pemain.
 
-Contoh implementasi action sederhana:
+Contoh implementasi (ringkas):
 
 ```ts
 // src/lib/onchain/starter.ts
+import { parseAbi, encodeFunctionData } from 'viem';
 import { sendTx } from './sendTx';
 import { STARTER_CLAIM_ABI } from '@/lib/abis/StarterClaim';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
+import { tryBatchSend } from '@/lib/onchain/batch';
 
-export async function claimStarterOnchain() {
-  return sendTx({
-    address: CONTRACT_ADDRESSES.starterClaim,
+const ERC20 = parseAbi([
+  'function approve(address spender, uint256 amount) returns (bool)'
+]);
+
+export async function claimStarterWithFBC(claim: any, sig: `0x${string}`, priceWei: bigint) {
+  // Coba batch (approve + claim) via EIP-5792
+  const approveData = encodeFunctionData({
+    abi: ERC20,
+    functionName: 'approve',
+    args: [CONTRACT_ADDRESSES.starterClaim, priceWei],
+  });
+  const claimData = encodeFunctionData({
     abi: STARTER_CLAIM_ABI as any,
     functionName: 'claim',
-    chainId: 8453,
+    args: [claim, sig],
   });
+
+  const batched = await tryBatchSend([
+    { to: CONTRACT_ADDRESSES.fbc, data: approveData },
+    { to: CONTRACT_ADDRESSES.starterClaim, data: claimData },
+  ]);
+  if (batched) return { hash: batched };
+
+  // Fallback sequential
+  await sendTx({ address: CONTRACT_ADDRESSES.fbc, abi: ERC20, functionName: 'approve', args: [CONTRACT_ADDRESSES.starterClaim, priceWei], chainId: 8453 });
+  return sendTx({ address: CONTRACT_ADDRESSES.starterClaim, abi: STARTER_CLAIM_ABI as any, functionName: 'claim', args: [claim, sig], chainId: 8453 });
 }
 ```
 
-Contoh penggunaan di komponen (ringkas):
+## 6.1) Guard Zero-Address: fallback TANPA kontrak (FBC transfer = claim)
+
+Jika `NEXT_PUBLIC_STARTER_CLAIM_ADDRESS` adalah zero address (0x000…000), jangan panggil `claim()` kontrak. Gunakan flow transfer FBC → verify server.
+
+Guard + implementasi ringkas:
+
+```ts
+// src/lib/onchain/starter.ts (tambahan)
+import { parseAbi } from 'viem';
+import { sendTx } from './sendTx';
+import { CONTRACT_ADDRESSES } from '@/lib/constants';
+
+const ERC20 = parseAbi([
+  'function transfer(address to, uint256 amount) returns (bool)'
+]);
+
+const ZERO = '0x0000000000000000000000000000000000000000' as const;
+const isZero = (a?: string) => !a || a.toLowerCase() === ZERO.toLowerCase();
+
+export async function payFbcDirect(amountWei: bigint) {
+  // Direct ERC20 transfer to treasury (tidak perlu approve)
+  return sendTx({
+    address: CONTRACT_ADDRESSES.fbc,
+    abi: ERC20,
+    functionName: 'transfer',
+    args: [CONTRACT_ADDRESSES.treasury, amountWei],
+    chainId: 8453,
+  });
+}
+
+export function shouldUseNoContract() {
+  return isZero(CONTRACT_ADDRESSES.starterClaim);
+}
+```
+
+Contoh pemakaian di komponen:
 
 ```ts
 import { quickAuth } from '@farcaster/miniapp-sdk';
 import { ensureWarpcastAndBase } from '@/lib/wallet/ensureWarpcast';
-import { claimStarterOnchain } from '@/lib/onchain/starter';
+import { claimStarterWithFBC, payFbcDirect, shouldUseNoContract } from '@/lib/onchain/starter';
 
 async function onClickClaim() {
   await ensureWarpcastAndBase();
-  const { hash } = await claimStarterOnchain();
+
+  if (shouldUseNoContract()) {
+    // Fallback no‑contract: quote → transfer → verify
+    const q = await quickAuth.fetch('/api/starter/quote', { method: 'POST' });
+    const { amountWei } = await q.json();
+    const { hash } = await payFbcDirect(BigInt(amountWei));
+    const res = await quickAuth.fetch('/api/starter/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHash: hash }),
+    });
+    if (!res.ok) throw new Error('Verification failed');
+    return;
+  }
+
+  // Opsi A (kontrak klaim)
+  const pre = await quickAuth.fetch('/api/starter/prepare', { method: 'POST' });
+  const { claim, sig, priceWei } = await pre.json();
+  const { hash } = await claimStarterWithFBC(claim, sig, BigInt(priceWei));
   const res = await quickAuth.fetch('/api/starter/verify', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ txHash: hash }),
@@ -296,7 +414,31 @@ async function onClickClaim() {
 }
 ```
 
-Catatan: Untuk pola pembayaran FBC (approve + transfer), gunakan helper yang sudah ada di project (`wallet-utils.ts`) dan/atau adaptasi ke `sendTx` + batching [2].
+Contoh penggunaan di komponen (ringkas):
+
+```ts
+import { quickAuth } from '@farcaster/miniapp-sdk';
+import { ensureWarpcastAndBase } from '@/lib/wallet/ensureWarpcast';
+import { claimStarterWithFBC } from '@/lib/onchain/starter';
+
+async function onClickClaim() {
+  await ensureWarpcastAndBase();
+
+  // 1) Dapatkan payload claim dari server
+  const pre = await quickAuth.fetch('/api/starter/prepare', { method: 'POST' });
+  const { claim, sig, priceWei } = await pre.json();
+
+  // 2) Kirim approve + claim (batch/sequential)
+  const { hash } = await claimStarterWithFBC(claim, sig, BigInt(priceWei));
+
+  // 3) Verifikasi server
+  const res = await quickAuth.fetch('/api/starter/verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash: hash }),
+  });
+  if (!res.ok) throw new Error('Verification failed');
+}
+```
 
 
 # 7) Transaksi ERC20 (approve/transfer) dengan Viem + Wagmi
@@ -328,9 +470,25 @@ Untuk Mini App dengan EIP‑5792, encode dua call di atas, lalu `wallet_sendCall
 
 # 8) Verifikasi Server & Sinkronisasi SpacetimeDB
 
-Server (Next.js Route) memverifikasi transaksi via Viem `getTransactionReceipt`/log parsing, lalu memanggil reducer SpacetimeDB. Project ini sudah memiliki:
-- `/api/starter/verify` (memakai `verifyFBCTransfer`) → memanggil `stGrantStarterPack` setelah valid.
-- `/api/starter/status` untuk state UI.
+Server memverifikasi transaksi via Viem `getTransactionReceipt`/log parsing, kemudian memanggil reducer SpacetimeDB.
+
+Untuk Opsi A (kontrak klaim + FBC):
+- `/api/starter/prepare`: buat 18 pemain + `packHash`; tandatangani EIP‑712 (Claim) dengan signer server; simpan pending pack (TTL) terikat ke FID/wallet.
+- `/api/starter/verify { txHash }`:
+  - Ambil receipt; pastikan `to == STARTER_CLAIM_ADDRESS` atau terdapat event `StarterPackGranted` dari alamat tersebut.
+  - Parse event: cocokkan `fid`, `packHash`, dan (opsional) `priceWei`/`pool` sesuai prepare.
+  - Ikat ke identitas: wallet pemanggil harus cocok dengan sesi/Warpcast; FID harus sama dengan sesi.
+  - Idempotensi: tolak jika FID sudah pernah klaim; tandai `txHash` sebagai used; untuk pemanggilan ulang oleh FID yang sama → return success.
+  - (Opsional) Validasi juga log `Transfer` ERC20 FBC dalam tx yang sama: from=user, to=TREASURY, amount ≥ priceWei.
+  - Jika valid → panggil reducer `grant_starter_pack` untuk memberi 18 pemain.
+
+Untuk mode TANPA kontrak (fallback zero‑address):
+- `/api/starter/quote`: kembalikan `amountWei` berdasar USD target.
+- `/api/starter/verify { txHash }`:
+  - Ambil receipt; temukan log `Transfer` dari `FBC_TOKEN_ADDRESS`.
+  - Pastikan `from == wallet_user` dan `to == TREASURY_ADDRESS`, `amount ≥ amountWei`, chain = 8453, konfirmasi ≥ threshold.
+  - Ikat ke identitas FID/wallet dan idempotensi (1x per FID, `txHash` tidak boleh dipakai ulang lintas FID).
+  - Jika valid → panggil reducer `grant_starter_pack`.
 
 Best practice:
 - Tunggu ≥2 konfirmasi di client sebelum memanggil verifikasi (server bebas menambah threshold) [6].
@@ -349,10 +507,29 @@ Best practice:
 
 # 10) Checklist Implementasi per Fitur
 
-- Klaim Starter Pack: implement `claim()` (atau flow approve+transfer FBC → verify → reducer). Lihat §6.
+- Klaim Starter Pack (Opsi A): implement `claim()` di kontrak yang menagih FBC (approve/permit → claim) dan verifikasi event di server. Lihat §6–§8.
 - Marketplace buy/list/auction on‑chain (bila dipindah ke chain): standar pola §3/§7; setelah success panggil reducer untuk sinkronisasi notifikasi/inventory.
 - Link wallet on‑chain (jika diperlukan signature/permit): gunakan `signMessage`/`signTypedData` Viem; kirim ke server untuk verifikasi.
 - Batch ops (approve + tindakan) di Mini App: coba `wallet_sendCalls`; fallback ke sequential (§4).
+
+
+# 11) Konfigurasi Environment (disarankan)
+
+Frontend (public):
+- `NEXT_PUBLIC_BASE_RPC_URL`
+- `NEXT_PUBLIC_FBC_ADDRESS`
+- `NEXT_PUBLIC_TREASURY_ADDRESS`
+- `NEXT_PUBLIC_STARTER_CLAIM_ADDRESS`
+
+Server (privat):
+- `PACK_SIGNER_PRIVATE_KEY` (EIP‑712 signer)
+- `PACK_POOL_VERSION` (versi pool/season)
+- `STARTER_PRICE_FBC_WEI` atau aturan konversi USD→FBC
+- `MIN_CONFIRMATIONS` (mis. 2)
+
+Catatan:
+- Tidak perlu deploy token FBC. Isi `NEXT_PUBLIC_FBC_ADDRESS` dengan alamat token FBC yang sudah ada di Base.
+- Jika tidak deploy kontrak StarterClaim, set `NEXT_PUBLIC_STARTER_CLAIM_ADDRESS=0x0000000000000000000000000000000000000000` dan UI otomatis memakai flow transfer FBC → verify.
 
 
 # Referensi / Sumber

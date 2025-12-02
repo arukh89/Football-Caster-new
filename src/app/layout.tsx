@@ -5,7 +5,6 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 import './globals.css';
 import { Providers } from '@/providers/Providers';
 import FarcasterWrapper from "@/components/FarcasterWrapper";
-import { StarterExperience } from '@/providers/StarterExperience';
 import { PvpNotifier } from '@/components/pvp/PvpNotifier';
 import { Toaster } from 'sonner';
 
@@ -21,15 +20,13 @@ export default function RootLayout({
               </head>
               <body className="min-h-screen bg-background font-sans antialiased championship-gradient">
                 <Providers>
-                  <StarterExperience>
-                    <div className="stadium-pattern min-h-screen">
-                      <FarcasterWrapper>
-                        {children}
-                        <PvpNotifier />
-                        <Toaster richColors position="top-center" closeButton />
-                      </FarcasterWrapper>
-                    </div>
-                  </StarterExperience>
+                  <div className="stadium-pattern min-h-screen">
+                    <FarcasterWrapper>
+                      {children}
+                      <PvpNotifier />
+                      <Toaster richColors position="top-center" closeButton />
+                    </FarcasterWrapper>
+                  </div>
                 </Providers>
               </body>
             </html>
