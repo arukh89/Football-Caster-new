@@ -1,12 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Trophy, Users, TrendingUp, Zap, ArrowRight, ShoppingBag, Gavel } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from '@/components/glass/GlassCard';
 import { StatPill } from '@/components/glass/StatPill';
 import { Navigation, DesktopNav } from '@/components/Navigation';
-import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
+import { PerformanceChart } from '@/components/PerformanceChart';
 import { UpcomingMatches } from '@/components/dashboard/UpcomingMatches';
 import { OnboardingFlow } from '@/components/tutorial/OnboardingFlow';
 import { StarterPackCard } from '@/components/starter/StarterPackCard';
@@ -45,12 +45,16 @@ export default function HomePage(): JSX.Element {
     setShowTutorial(false);
   };
 
-  // Single SDK initialization with retry logic
+  // Single SDK initialization with guard for strict-mode double invoke
+  const fcInitRef = useRef(false);
   useEffect(() => {
+    if (fcInitRef.current) return;
+    fcInitRef.current = true;
+
     const initializeFarcaster = async () => {
       try {
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         if (document.readyState !== 'complete') {
           await new Promise<void>(resolve => {
             if (document.readyState === 'complete') {
@@ -66,7 +70,7 @@ export default function HomePage(): JSX.Element {
         console.log('Farcaster SDK initialized successfully');
       } catch (error) {
         console.error('Failed to initialize Farcaster SDK:', error);
-        
+
         setTimeout(async () => {
           try {
             await sdk.actions.ready();
@@ -79,7 +83,7 @@ export default function HomePage(): JSX.Element {
       }
     };
 
-    initializeFarcaster();
+    void initializeFarcaster();
   }, [addMiniApp]);
 
   // Farcaster SDK initialization complete
