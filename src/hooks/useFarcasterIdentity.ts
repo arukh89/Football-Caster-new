@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { quickAuth } from '@farcaster/miniapp-sdk';
 import type { FarcasterIdentity } from '@/lib/types';
+import { useIsInFarcaster } from '@/hooks/useIsInFarcaster';
 
 /**
  * Hook to get Farcaster identity using the SDK
@@ -17,13 +18,17 @@ export function useFarcasterIdentity(): {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isInFarcaster = useIsInFarcaster();
+
   useEffect(() => {
     let mounted = true;
 
     const fetchIdentity = async (): Promise<void> => {
       try {
-        // Use Quick Auth to make an authenticated request to our backend
-        const res = await quickAuth.fetch('/api/auth/me');
+        // In Farcaster, use QuickAuth; otherwise use plain fetch (dev fallback on server)
+        const res = isInFarcaster
+          ? await quickAuth.fetch('/api/auth/me')
+          : await fetch('/api/auth/me');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (mounted) {
@@ -45,7 +50,7 @@ export function useFarcasterIdentity(): {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isInFarcaster]);
 
   return { identity, isLoading, error };
 }

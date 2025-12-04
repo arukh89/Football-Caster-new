@@ -5,6 +5,7 @@ import { Gift, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { GlassCard } from "@/components/glass/GlassCard";
 import { Button } from "@/components/ui/button";
 import { quickAuth } from "@farcaster/miniapp-sdk";
+import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
 import { useWallet } from "@/hooks/useWallet";
 import { payInFBC, formatFBC } from "@/lib/wallet-utils";
 import { CONTRACT_ADDRESSES } from "@/lib/constants";
@@ -18,6 +19,15 @@ interface QuoteResponse {
 }
 
 export function StarterPackCard(): JSX.Element | null {
+  const isInFarcaster = useIsInFarcaster();
+  const authFetch = React.useCallback(
+    (input: RequestInfo | URL, init?: RequestInit) => {
+      return isInFarcaster
+        ? (quickAuth.fetch as any)(input as any, init as any)
+        : fetch(input, init);
+    },
+    [isInFarcaster]
+  );
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -32,7 +42,7 @@ export function StarterPackCard(): JSX.Element | null {
     try {
       setLoading(true);
       setError(null);
-      const res = await quickAuth.fetch("/api/starter/status", { cache: "no-store" });
+      const res = await authFetch("/api/starter/status", { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as { hasClaimed: boolean };
       setHasClaimed(!!data.hasClaimed);
@@ -53,7 +63,8 @@ export function StarterPackCard(): JSX.Element | null {
       setError(null);
       setStep('quote');
       
-      const res = await quickAuth.fetch("/api/starter/quote", { 
+      // Quote does not require auth
+      const res = await fetch("/api/starter/quote", { 
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -103,7 +114,7 @@ export function StarterPackCard(): JSX.Element | null {
       setStep('verifying');
       
       // Verify payment and grant pack
-      const res = await quickAuth.fetch("/api/starter/verify", {
+      const res = await authFetch("/api/starter/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash: hash }),
