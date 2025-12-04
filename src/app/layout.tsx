@@ -7,6 +7,7 @@ import { Providers } from '@/providers/Providers';
 import FarcasterWrapper from "@/components/FarcasterWrapper";
 import { PvpNotifier } from '@/components/pvp/PvpNotifier';
 import { Toaster } from 'sonner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function RootLayout({
   children,
