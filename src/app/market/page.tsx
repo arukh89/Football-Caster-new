@@ -102,12 +102,13 @@ export default function MarketPage(): JSX.Element {
                     value={search}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
                     className="pl-10"
+                    aria-label="Search players"
                   />
                 </div>
               </div>
               
               <Select value={positionFilter} onValueChange={setPositionFilter}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by position">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Position" />
                 </SelectTrigger>
@@ -121,8 +122,8 @@ export default function MarketPage(): JSX.Element {
               </Select>
 
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
-                  <SelectValue />
+                <SelectTrigger aria-label="Sort listings">
+                  <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="rating">Highest Rating</SelectItem>
