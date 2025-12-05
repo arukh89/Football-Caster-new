@@ -130,6 +130,53 @@ pub struct PlayerState {
     pub matches_benched_7d: i32,
     pub last_match_at_ms: Option<i64>,
 }
+
+// Match officials (referee crew & VAR)
+#[table(name = officials, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Official {
+    #[primary_key]
+    pub official_id: String, // e.g., ref-{uuid}
+    pub role: String,        // referee|assistant_left|assistant_right|var
+    // Attributes 0..100
+    pub strictness: i32,
+    pub advantage_tendency: i32,
+    pub offside_tolerance: i32,
+    pub var_propensity: i32,
+    pub consistency: i32,
+    pub fitness: i32,
+    pub reputation: i32,
+    pub ai_seed: i64,
+    pub active: bool,
+    pub last_assigned_ms: i64,
+}
+
+// Per-match assignment of officials
+#[table(name = match_official_assignment, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct MatchOfficialAssignment {
+    #[primary_key]
+    pub match_id: String, // refers to pvp_match.id
+    pub referee_id: String,
+    pub assistant_left_id: String,
+    pub assistant_right_id: String,
+    pub var_id: Option<String>,
+    pub assigned_at_ms: i64,
+}
+
+// Optional commentary log (alternatively use Event)
+#[table(name = commentary_log, public)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CommentaryLog {
+    #[primary_key]
+    pub id: String,
+    pub match_id: String,
+    pub ts_ms: i64,
+    pub tone: String, // calm|enthusiastic|critical|dramatic
+    pub lang: String,
+    pub text: String,
+    pub meta_json: String,
+}
  
  #[table(name = listing, public)]
  #[derive(Clone, Serialize, Deserialize)]
@@ -557,6 +604,109 @@ pub fn npc_update_state(
     _budget_fbc_wei: String,
 ) {
     unimplemented!("npc_update_state not implemented yet");
+}
+
+// --- Player State Reducers (signatures only) ---
+
+#[reducer]
+pub fn player_profile_init(
+    _ctx: &ReducerContext,
+    _player_id: String,
+    _age_years: i16,
+    _morale: i32,
+    _fatigue: i32,
+    _satisfaction: i32,
+    _loyalty: i32,
+) {
+    unimplemented!("player_profile_init not implemented yet");
+}
+
+#[reducer]
+pub fn player_state_apply_match(
+    _ctx: &ReducerContext,
+    _player_id: String,
+    _minutes_played: i32,
+    _benched: bool,
+    _result: String,
+    _events_json: String,
+) {
+    unimplemented!("player_state_apply_match not implemented yet");
+}
+
+#[reducer]
+pub fn player_state_recover_tick(_ctx: &ReducerContext, _now_ms: i64) {
+    unimplemented!("player_state_recover_tick not implemented yet");
+}
+
+#[reducer]
+pub fn player_age_tick(_ctx: &ReducerContext) {
+    unimplemented!("player_age_tick not implemented yet");
+}
+
+// --- Officials & Commentary Reducers (signatures only) ---
+
+#[reducer]
+pub fn official_create(
+    _ctx: &ReducerContext,
+    _role: String,
+    _ai_seed: i64,
+    _strictness: i32,
+    _advantage_tendency: i32,
+    _offside_tolerance: i32,
+    _var_propensity: i32,
+    _consistency: i32,
+    _fitness: i32,
+    _reputation: i32,
+) -> String {
+    unimplemented!("official_create not implemented yet");
+}
+
+#[reducer]
+pub fn official_assign_to_match(
+    _ctx: &ReducerContext,
+    _match_id: String,
+    _referee_id: String,
+    _assistant_left_id: String,
+    _assistant_right_id: String,
+    _var_id: Option<String>,
+) {
+    unimplemented!("official_assign_to_match not implemented yet");
+}
+
+#[reducer]
+pub fn official_update_after_match(
+    _ctx: &ReducerContext,
+    _official_id: String,
+    _fitness_delta: i32,
+    _reputation_delta: i32,
+    _consistency_delta: i32,
+) {
+    unimplemented!("official_update_after_match not implemented yet");
+}
+
+#[reducer]
+pub fn var_review_record(
+    _ctx: &ReducerContext,
+    _match_id: String,
+    _ts_ms: i64,
+    _decision: String,
+    _reason: String,
+    _meta_json: String,
+) {
+    unimplemented!("var_review_record not implemented yet");
+}
+
+#[reducer]
+pub fn commentary_append(
+    _ctx: &ReducerContext,
+    _match_id: String,
+    _ts_ms: i64,
+    _tone: String,
+    _lang: String,
+    _text: String,
+    _meta_json: String,
+) {
+    unimplemented!("commentary_append not implemented yet");
 }
      
      // Mark transaction as used
