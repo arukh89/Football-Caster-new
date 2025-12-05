@@ -11,10 +11,15 @@ const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
-// USDC on Base (official). If bridged USDbC is needed we can add later.
-const USDC_BASES: `0x${string}`[] = [
+// USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
+const USDC_DEFAULTS: `0x${string}`[] = [
   '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
 ];
+const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || process.env.USDC_ADDRESSES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
+const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_DEFAULTS, ...USDC_ENV]));
 const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
 // Uniswap V3 Factory on Base (per official deployments)
 const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
@@ -450,19 +455,13 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer Uniswap v3 on-chain, then 0x (Matcha), then custom endpoint, then Dexscreener, then Clanker HTML
+  // Prefer: 0x (Matcha) → Dexscreener → Custom → Uniswap v3 (on-chain) → Clanker
   let priceUsd: string | null = null;
   let source: 'clanker' | 'dexscreener' | 'custom' | '0x' | 'uniswap_v3' = 'dexscreener';
 
-  // Uniswap v3 on-chain
-  priceUsd = await fetchFromUniswapV3Onchain();
-  if (priceUsd) source = 'uniswap_v3';
-
-  // 0x/Matcha
-  if (!priceUsd) {
-    priceUsd = await fetchFrom0x();
-    if (priceUsd) source = '0x';
-  }
+  // 0x/Matcha (Base)
+  priceUsd = await fetchFrom0x();
+  if (priceUsd) source = '0x';
 
   // Custom URL
   if (!priceUsd && CUSTOM_PRICE_URL) {
@@ -474,6 +473,12 @@ export async function getFBCPrice(): Promise<PriceData> {
   if (!priceUsd) {
     priceUsd = await fetchFromDexscreener();
     if (priceUsd) source = 'dexscreener';
+  }
+
+  // Uniswap v3 on-chain (last)
+  if (!priceUsd) {
+    priceUsd = await fetchFromUniswapV3Onchain();
+    if (priceUsd) source = 'uniswap_v3';
   }
 
   // Fallback to Clanker
@@ -491,6 +496,9 @@ export async function getFBCPrice(): Promise<PriceData> {
   if (isNaN(price) || price <= 0) {
     throw new Error('Invalid price data received');
   }
+
+  // Debug log for diagnostics
+  try { console.debug('[pricing] source=%s priceUsd=%s', source, priceUsd); } catch {}
 
   // Cache and return
   cachedPrice = {
