@@ -150,6 +150,10 @@ export async function getSpacetime() {
   }
   try {
     const conn = await _clientPromise;
+    try {
+      // Ensure client cache is populated
+      conn.subscriptionBuilder?.().subscribeToAllTables?.();
+    } catch {}
     _client = conn;
     return conn;
   } catch (err) {
@@ -163,9 +167,38 @@ export function getEnv() {
 }
 
 // Placeholder typed helpers – replaced by generated bindings later
+function toSnakeCase(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase();
+}
+
+function toCamelCase(name: string): string {
+  return name.replace(/[_-](\w)/g, (_, c) => c.toUpperCase());
+}
+
 export async function reducers() {
   const st = await getSpacetime();
-  return st.reducers as any;
+  const raw: any = st.reducers as any;
+  if (!raw || typeof raw !== 'object') return raw;
+  const out: any = {};
+  const keys = Object.getOwnPropertyNames(raw).filter((k) => typeof raw[k] === 'function');
+  for (const k of keys) {
+    const fn = raw[k].bind(raw);
+    const snake = toSnakeCase(k);
+    const camel = toCamelCase(k);
+    out[k] = fn;
+    out[snake] = fn;
+    out[camel] = fn;
+  }
+  out.get = (name: string) => out[name] || out[toSnakeCase(name)] || out[toCamelCase(name)];
+  out.call = (name: string, ...args: any[]) => {
+    const fn = out.get(name);
+    if (typeof fn !== 'function') throw new Error(`Reducer ${name} not available`);
+    return fn(...args);
+  };
+  return out;
 }
 
 export type ReducerCall<TArgs extends any[] = any[], TRes = any> = (...args: TArgs) => Promise<TRes>;

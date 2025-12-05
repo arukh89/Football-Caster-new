@@ -37,7 +37,14 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       const { URI, DB_NAME } = getEnv();
       const reducerKeys = r ? Object.getOwnPropertyNames(r).filter((k) => typeof (r as any)[k] !== 'undefined') : [];
       const tableKeys = st?.db ? Object.getOwnPropertyNames(st.db).filter((k) => !k.startsWith('_')) : [];
-      const ok = !!(r && (typeof r.grant_starter_pack === 'function' || typeof r.get === 'function' || typeof r.call === 'function'));
+      const ok = !!(
+        r && (
+          typeof (r as any).grant_starter_pack === 'function' ||
+          typeof (r as any).grantStarterPack === 'function' ||
+          typeof (r as any).get === 'function' ||
+          typeof (r as any).call === 'function'
+        )
+      );
       if (!ok) {
         return NextResponse.json(
           {
@@ -74,10 +81,6 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     if (wallet) {
       await stLinkWallet(fid, wallet.toLowerCase());
     }
-
-    // Prevent double grant
-    const already = await stHasClaimedStarter(fid);
-    if (already) return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
 
     const players = generateStarterPack();
     try {
