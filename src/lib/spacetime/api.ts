@@ -322,6 +322,51 @@ export async function stMarkTxUsed(txHash: string, fid: number, endpoint: string
   await fn(txHash, fid, endpoint);
 }
 
+// --- NPC & Squad wrappers ---
+export async function stNpcAssignForUser(userFid: number, count: number): Promise<void> {
+  await callReducerCompat('npc_assign_for_user', [userFid, count], { userFid, count });
+}
+
+export async function stNpcCreate(
+  npcFid: number,
+  displayName: string,
+  aiSeed: number,
+  difficultyTier: number,
+  budgetFbcWei: string,
+  personaJson: string,
+): Promise<void> {
+  await callReducerCompat('npc_create', [npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson], {
+    npcFid, displayName, aiSeed, difficultyTier, budgetFbcWei, personaJson,
+  });
+}
+
+export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<string> {
+  const r = await reducers() as any;
+  if (typeof r.npc_mint_token === 'function') return r.npc_mint_token(npcFid, ownerFid);
+  return callReducerCompat('npc_mint_token', [npcFid, ownerFid], { npcFid, ownerFid }) as any;
+}
+
+export async function stSquadMintFromFarcaster(
+  sourceFid: number,
+  followers: number,
+  ownerFid: number,
+  intelligenceScore: number,
+  rank: string,
+  personaJson: string,
+): Promise<string> {
+  const r = await reducers() as any;
+  if (typeof r.squad_mint_from_farcaster === 'function') {
+    return r.squad_mint_from_farcaster(sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson);
+  }
+  return callReducerCompat('squad_mint_from_farcaster', [sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson], {
+    sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson,
+  }) as any;
+}
+
+export async function stNpcUpdateState(npcFid: number, nextDecisionAtMs: number, budgetFbcWei: string): Promise<void> {
+  await callReducerCompat('npc_update_state', [npcFid, nextDecisionAtMs, budgetFbcWei], { npcFid, nextDecisionAtMs, budgetFbcWei });
+}
+
 // PvP reducers
 export async function stPvpChallenge(challengerFid: number, challengedFid: number): Promise<{ id: string }> {
   const r = await reducers();
