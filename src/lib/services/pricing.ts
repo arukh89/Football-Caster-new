@@ -166,16 +166,17 @@ function usdPerFbcFromSqrt(
 
   if (token0.toLowerCase() === fbc.toLowerCase()) {
     // token0 = FBC (d0=fbc), token1 = USDC (d1=usdc)
-    // USD/FBC = ratioX192 / q192 * 10^(usdc - fbc)
-    const numerator = ratioX192 * pow10(usdcDecimals);
-    const denominator = q192 * pow10(fbcDecimals);
+    // Correct decimal factor uses 10^(d0 - d1) => 10^(fbc - usdc)
+    // USD/FBC = (ratioX192 / q192) * 10^(fbc - usdc)
+    const numerator = ratioX192 * pow10(fbcDecimals);
+    const denominator = q192 * pow10(usdcDecimals);
     return divToDecimalString(numerator, denominator, 12);
   } else {
     // token0 = USDC (d0=usdc), token1 = FBC (d1=fbc)
-    // FBC/USDC = ratioX192 / q192 * 10^(fbc - usdc)
-    // USD/FBC = 1 / (FBC/USDC) = q192 / ratioX192 * 10^(usdc - fbc)
-    const numerator = q192 * pow10(usdcDecimals);
-    const denominator = ratioX192 * pow10(fbcDecimals);
+    // FBC/USDC = (ratioX192 / q192) * 10^(usdc - fbc)  [since 10^(d0 - d1)]
+    // USD/FBC = 1 / (FBC/USDC) = (q192 * 10^fbc) / (ratioX192 * 10^usdc)
+    const numerator = q192 * pow10(fbcDecimals);
+    const denominator = ratioX192 * pow10(usdcDecimals);
     return divToDecimalString(numerator, denominator, 12);
   }
 }
@@ -222,8 +223,9 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
       // price1Per0 = t1 per t0; we want USD/WETH
       const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
       const q192 = 2n ** 192n;
-      const factorNum = pow10(dec1); // 10^decimals(token1)
-      const factorDen = pow10(dec0); // 10^decimals(token0)
+      // Decimal normalization: 10^(dec0 - dec1)
+      const factorNum = pow10(dec0); // token0 decimals
+      const factorDen = pow10(dec1); // token1 decimals
       const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
       let val: string;
       if (t0.toLowerCase() === WETH_BASE.toLowerCase()) {
@@ -260,8 +262,9 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
       // price1Per0 = t1 per t0
       const ratioX192 = state.sqrtPriceX96 * state.sqrtPriceX96;
       const q192 = 2n ** 192n;
-      const factorNum = pow10(dec1);
-      const factorDen = pow10(dec0);
+      // Decimal normalization: 10^(dec0 - dec1)
+      const factorNum = pow10(dec0);
+      const factorDen = pow10(dec1);
       const price1Per0 = divToDecimalString(ratioX192 * factorNum, q192 * factorDen, 12);
       let val: string;
       if (t0.toLowerCase() === fbc.toLowerCase()) {
