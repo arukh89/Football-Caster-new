@@ -342,11 +342,11 @@ export async function payInFBC(
             }
             if (!best) throw new Error('No viable Uniswap v3 multi-hop path USDC→WETH→FBC');
 
-            const amountInMax = (best.amountIn * 102n) / 100n; // +2% slippage
+            const amountInMax = (best!.amountIn * 102n) / 100n; // +2% slippage
             const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
             const path = encodeV3PathExactOutput(
-              [CONTRACT_ADDRESSES.fbc, WETH_BASE, best.usdc],
-              best.fees
+              [CONTRACT_ADDRESSES.fbc, WETH_BASE, best!.usdc],
+              best!.fees
             );
             const params = {
               path,
