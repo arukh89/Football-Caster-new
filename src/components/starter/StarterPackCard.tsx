@@ -15,6 +15,7 @@ import { base } from "viem/chains";
 interface QuoteResponse {
   amountWei: string;
   priceUsd: string;
+  usdAmount?: string;
 }
 
 export function StarterPackCard(): JSX.Element | null {
@@ -169,7 +170,7 @@ export function StarterPackCard(): JSX.Element | null {
           {quote && step === 'payment' && (
             <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded">
               <div className="text-sm">Price: {formatFBC(quote.amountWei)} FBC</div>
-              <div className="text-xs text-muted-foreground">(~${quote.priceUsd} USD)</div>
+              <div className="text-xs text-muted-foreground">(~${quote.usdAmount || '1'} USD)</div>
             </div>
           )}
 

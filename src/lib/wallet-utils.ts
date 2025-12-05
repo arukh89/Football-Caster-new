@@ -8,6 +8,15 @@ import { sendTx } from '@/lib/onchain/sendTx';
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [
   {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
     name: 'approve',
     type: 'function',
     stateMutability: 'nonpayable',
@@ -101,6 +110,21 @@ export async function payInFBC(
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
     const amountBigInt = BigInt(amount);
+    const [account] = await walletClient.getAddresses();
+    if (!account) throw new Error('No account connected');
+
+    // Pre-check balance to surface friendly error before simulate/write
+    const balance = await readContract(publicClient, {
+      address: CONTRACT_ADDRESSES.fbc,
+      abi: ERC20_ABI,
+      functionName: 'balanceOf',
+      args: [account],
+    });
+    if (balance < amountBigInt) {
+      const have = formatUnits(balance, 18);
+      const need = formatUnits(amountBigInt, 18);
+      throw new Error(`Insufficient FBC balance. You have ${have}, need ${need}.`);
+    }
 
     // Standardized: simulate → write → wait via wagmi actions
     const { hash } = await sendTx({

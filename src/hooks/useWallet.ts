@@ -37,18 +37,22 @@ export function useWallet(): {
   const isCorrectChain = chainId === CHAIN_CONFIG.chainId;
 
   const connect = (): void => {
-    // Prefer Farcaster connector inside Mini App env, otherwise prefer injected (MetaMask)
+    // Prefer Farcaster connector inside Mini App env, otherwise prefer injected (MetaMask/OKX)
     const pick = () => {
+      const byId = (id: string) => connectors.find((c: any) => c?.id === id || c?.type === id);
       if (isInFarcaster) {
         return (
           connectors.find((c: any) => (c.id?.toString() || '').includes('farcaster') || (c.name || '').toLowerCase().includes('farcaster')) ||
-          connectors.find((c) => c.ready) ||
+          byId('farcaster') ||
           connectors[0]
         );
       }
+      // Web: detect injected availability (MetaMask/OKX/Coinbase etc.)
+      const w: any = typeof window !== 'undefined' ? window : {};
+      const hasInjected = !!(w.ethereum || w.okxwallet || (w.ethereum?.providers && w.ethereum.providers.length));
       return (
-        connectors.find((c: any) => (c.id === 'injected' || (c.name || '').toLowerCase().includes('metamask')) && c.ready) ||
-        connectors.find((c) => c.ready) ||
+        (hasInjected && (byId('injected') || connectors.find((c: any) => (c.name || '').toLowerCase().includes('injected') || (c.name || '').toLowerCase().includes('metamask')))) ||
+        byId('injected') ||
         connectors[0]
       );
     };
