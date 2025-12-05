@@ -3,6 +3,7 @@ import { parseUnits, formatUnits } from 'viem';
 import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { base } from 'viem/chains';
 import { CONTRACT_ADDRESSES } from './constants';
+import { sendTx } from '@/lib/onchain/sendTx';
 
 // ERC20 ABI for approve and transfer functions
 const ERC20_ABI = [
@@ -99,24 +100,16 @@ export async function payInFBC(
   amount: string,
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
-    const [account] = await walletClient.getAddresses();
-    if (!account) {
-      throw new Error('No account connected');
-    }
-
     const amountBigInt = BigInt(amount);
 
-    // Direct ERC-20 transfer (no approval needed for simple sends)
-    const hash = await walletClient.writeContract({
+    // Standardized: simulate → write → wait via wagmi actions
+    const { hash } = await sendTx({
       address: CONTRACT_ADDRESSES.fbc,
-      abi: ERC20_ABI,
+      abi: ERC20_ABI as any,
       functionName: 'transfer',
       args: [to, amountBigInt],
-      account,
-      chain: base,
+      confirmations: 2,
     });
-
-    await waitForTransactionReceipt(publicClient, { hash });
 
     return { hash, success: true };
   } catch (err) {

@@ -34,7 +34,7 @@ export function StarterPackCard(): JSX.Element | null {
   const [quote, setQuote] = React.useState<QuoteResponse | null>(null);
   const [step, setStep] = React.useState<'idle' | 'quote' | 'payment' | 'verifying' | 'complete'>('idle');
   
-  const { wallet, walletClient, publicClient: walletPublicClient, connect } = useWallet();
+  const { wallet, walletClient, publicClient: walletPublicClient, connect, switchToBase, isCorrectChain } = useWallet();
   const account = wallet.address;
 
   const refreshStatus = React.useCallback(async () => {
@@ -102,6 +102,11 @@ export function StarterPackCard(): JSX.Element | null {
         return;
       }
       
+      // Ensure Base chain before paying
+      if (!isCorrectChain) {
+        await switchToBase();
+      }
+
       // Pay to treasury
       const { hash } = await payInFBC(
         walletClient as any, 
