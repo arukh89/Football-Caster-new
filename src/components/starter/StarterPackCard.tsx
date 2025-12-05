@@ -115,10 +115,17 @@ export function StarterPackCard(): JSX.Element | null {
           }
         }
         if (!fid) throw new Error('Unable to determine your FID');
+        // Gasless admin verification via signature (no gas cost)
+        let signature: `0x${string}` | undefined;
+        let message: string | undefined;
+        if (isAdminWallet && walletClient) {
+          message = `fc-admin-grant:fid=${fid}`;
+          signature = await (walletClient as any).signMessage({ account, message });
+        }
         const res = await authFetch("/api/admin/starter/grant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fid, wallet: account }),
+          body: JSON.stringify({ fid, wallet: account, signature, message }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));

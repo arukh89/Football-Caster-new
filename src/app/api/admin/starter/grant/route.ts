@@ -9,6 +9,7 @@ import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
 import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet } from '@/lib/spacetime/api';
 import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/client';
 import type { Address } from 'viem';
+import { recoverMessageAddress, isAddressEqual } from 'viem';
 import { randomUUID } from 'crypto';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
 
@@ -63,21 +64,31 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         { status: 500 }
       );
     }
-    // Authorization: only admin wallet or dev FID
-    const isAdminWallet = (ctx.wallet || '').toLowerCase() === (CONTRACT_ADDRESSES.treasury as Address).toLowerCase();
-    if (!isAdminWallet && !isDevFID(ctx.fid)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
+    // Parse input
     const body = await req.json().catch(() => ({}));
     const validation = validate(adminGrantStarterSchema, body);
     if (!validation.success) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { fid, wallet } = validation.data;
+    const { fid, wallet, signature, message } = validation.data as { fid: number; wallet?: string; signature?: `0x${string}`; message?: string };
 
-    // Optional: link wallet if provided
+    // Authorization: require admin signature unless dev FID
+    const isDev = isDevFID(ctx.fid);
+    if (!isDev) {
+      if (!signature || !message) {
+        return NextResponse.json({ error: 'Missing admin signature' }, { status: 400 });
+      }
+      try {
+        const recovered = await recoverMessageAddress({ message, signature });
+        const ok = isAddressEqual(recovered as Address, CONTRACT_ADDRESSES.treasury as Address);
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      } catch (e) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+      }
+    }
+
+    // Optional: link target wallet if provided
     if (wallet) {
       await stLinkWallet(fid, wallet.toLowerCase());
     }
