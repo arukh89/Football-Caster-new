@@ -579,7 +579,7 @@ pub fn npc_assign_for_user(_ctx: &ReducerContext, _user_fid: i64, _count: i16) {
 }
 
 #[reducer]
-pub fn npc_mint_token(_ctx: &ReducerContext, _npc_fid: i64, _owner_fid: i64) -> String {
+pub fn npc_mint_token(_ctx: &ReducerContext, _npc_fid: i64, _owner_fid: i64) {
     unimplemented!("npc_mint_token not implemented yet");
 }
 
@@ -592,7 +592,7 @@ pub fn squad_mint_from_farcaster(
     _intelligence_score: i32,
     _rank: String,
     _persona_json: String,
-) -> String {
+) {
     unimplemented!("squad_mint_from_farcaster not implemented yet");
 }
 
@@ -657,7 +657,7 @@ pub fn official_create(
     _consistency: i32,
     _fitness: i32,
     _reputation: i32,
-) -> String {
+) {
     unimplemented!("official_create not implemented yet");
 }
 
