@@ -11,10 +11,9 @@ const CLANKER_URL = 'https://www.clanker.world/clanker/0xcb6e9f9bab4164eaa97c982
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
 const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
-// USDC variants on Base (official + bridged USDbC)
+// USDC on Base (official). If bridged USDbC is needed we can add later.
 const USDC_BASES: `0x${string}`[] = [
-  '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0', // USDC (official)
-  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDbC (legacy)
+  '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
 ];
 
 interface PriceData {
@@ -53,6 +52,29 @@ async function getTokenDecimals(addr: `0x${string}`): Promise<number> {
   }
 }
 
+// Convert a BigInt and decimals to a decimal string without losing precision
+function formatUnitsString(value: bigint, decimals: number): string {
+  const neg = value < 0n;
+  const v = neg ? -value : value;
+  const base = 10n ** BigInt(decimals);
+  const integer = v / base;
+  const fraction = v % base;
+  if (fraction === 0n) return `${neg ? '-' : ''}${integer.toString()}`;
+  // pad fraction to length "decimals"
+  const fracStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${neg ? '-' : ''}${integer.toString()}.${fracStr}`;
+}
+
+// Compute (numerator / denominator) as decimal string with given precision
+function divToDecimalString(numerator: bigint, denominator: bigint, precision = 18): string {
+  if (denominator === 0n) return '0';
+  const scale = 10n ** BigInt(precision);
+  const scaled = (numerator * scale) / denominator; // floor division
+  const intPart = scaled / scale;
+  const fracPart = (scaled % scale).toString().padStart(precision, '0').replace(/0+$/, '');
+  return fracPart.length ? `${intPart.toString()}.${fracPart}` : intPart.toString();
+}
+
 /**
  * Fetch FBC price from Clanker
  */
@@ -85,6 +107,7 @@ async function fetchFrom0x(): Promise<string | null> {
     const fbc = CONTRACT_ADDRESSES.fbc;
     // Try both USDC variants; take the first successful response
     for (const usdc of USDC_BASES) {
+      // Ask for price buying FBC with exactly 1 USDC (6 decimals)
       const url = `${OX_PRICE_URL}?sellToken=${usdc}&buyToken=${fbc}&sellAmount=1000000`;
       const res = await fetch(url, {
         headers: {
@@ -94,15 +117,18 @@ async function fetchFrom0x(): Promise<string | null> {
       });
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
-      const buyAmount = data?.buyAmount; // in FBC base units (token decimals)
-      if (!buyAmount) continue;
-      const buyAmountNum = Number(buyAmount);
-      if (!isFinite(buyAmountNum) || buyAmountNum <= 0) continue;
+      const buyAmountStr: string | undefined = data?.buyAmount; // in FBC base units (token decimals)
+      if (!buyAmountStr) continue;
+      let buyAmount: bigint;
+      try { buyAmount = BigInt(buyAmountStr); } catch { continue; }
+      if (buyAmount <= 0n) continue;
       const fbcDecimals = await getTokenDecimals(CONTRACT_ADDRESSES.fbc);
-      const fbcPerUsd = buyAmountNum / Math.pow(10, fbcDecimals); // FBC per 1 USDC
-      if (!isFinite(fbcPerUsd) || fbcPerUsd <= 0) continue;
-      const usdPerFbc = 1 / fbcPerUsd;
-      return usdPerFbc.toString();
+      // USD per FBC = 1 / (FBC per 1 USD)
+      // FBC per 1 USD = buyAmount / 10^fbcDecimals
+      // => USD/FBC = 10^fbcDecimals / buyAmount
+      const numerator = 10n ** BigInt(fbcDecimals);
+      const usdPerFbcStr = divToDecimalString(numerator, buyAmount, 12);
+      return usdPerFbcStr;
     }
     return null;
   } catch (err) {
