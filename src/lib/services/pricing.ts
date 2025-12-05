@@ -174,9 +174,11 @@ function usdPerFbcFromSqrt(
     return divToDecimalString(numerator, denominator, 12);
   } else {
     // token0 = USDC, token1 = FBC → P = FBC per USDC → USD/FBC = 1/P
-    // USD/FBC = (2^192) / (ratioX192 * 10^(d0-d1))
-    const numerator = q192 * invScale;
-    const denominator = ratioX192 * scale;
+    // Here d0-d1 = usdcDecimals - fbcDecimals = (-(fbcDecimals - usdcDecimals))
+    // USD/FBC = (2^192) / (ratioX192 * 10^(usdcDecimals - fbcDecimals))
+    // Using decDiff = fbcDecimals - usdcDecimals → 10^(usdc - fbc) = invScale
+    const numerator = q192;
+    const denominator = ratioX192 * invScale;
     return divToDecimalString(numerator, denominator, 12);
   }
 }
@@ -233,7 +235,8 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
         val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
       } else {
         // token0=USDC → WETH/USDC → invert
-        val = divToDecimalString(q192 * invScale, ratioX192 * scale, 12);
+        // USDC/WETH = 1 / (WETH/USDC) = (2^192) / (ratio * 10^(usdc - weth))
+        val = divToDecimalString(q192, ratioX192 * invScale, 12);
       }
       usdPerWeth = val;
       break;
@@ -265,7 +268,9 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
         val = divToDecimalString(ratioX192 * scale, q192 * invScale, 12);
       } else {
         // token0=WETH → FBC per WETH → invert to WETH/FBC
-        val = divToDecimalString(q192 * invScale, ratioX192 * scale, 12);
+        // WETH/FBC = 1 / (FBC/WETH) = (2^192) / (ratio * 10^(weth - fbc))
+        // Here decDiff = fbc - weth → (weth - fbc) uses invScale
+        val = divToDecimalString(q192, ratioX192 * invScale, 12);
       }
       wethPerFbc = val;
       break;
