@@ -8,7 +8,8 @@ import { quickAuth } from "@farcaster/miniapp-sdk";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
 import { useWallet } from "@/hooks/useWallet";
 import { payInFBC, formatFBC } from "@/lib/wallet-utils";
-import { CONTRACT_ADDRESSES } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, DEV_FID } from "@/lib/constants";
+import { useFarcasterIdentity } from "@/hooks/useFarcasterIdentity";
 import { createWalletClient, http, createPublicClient } from "viem";
 import { base } from "viem/chains";
 
@@ -37,6 +38,9 @@ export function StarterPackCard(): JSX.Element | null {
   
   const { wallet, walletClient, publicClient: walletPublicClient, connect, switchToBase, isCorrectChain } = useWallet();
   const account = wallet.address;
+  const { identity } = useFarcasterIdentity();
+  const isDev = identity?.fid === DEV_FID;
+  const isAdminWallet = (account || '').toLowerCase() === CONTRACT_ADDRESSES.treasury.toLowerCase();
 
   const refreshStatus = React.useCallback(async () => {
     try {
@@ -94,6 +98,24 @@ export function StarterPackCard(): JSX.Element | null {
       
       if (!wallet.isConnected) {
         await connect();
+        return;
+      }
+
+      // Admin/Dev bypass: skip payment and directly verify
+      if (isDev || isAdminWallet) {
+        setStep('verifying');
+        const zeroHash = '0x' + '0'.repeat(64);
+        const res = await authFetch("/api/starter/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ txHash: zeroHash }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || "Verification failed");
+        }
+        setStep('complete');
+        await refreshStatus();
         return;
       }
 
