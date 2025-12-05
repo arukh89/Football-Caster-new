@@ -25,18 +25,18 @@ export async function GET(): Promise<Response> {
   // Placeholder: fetch top users from Neynar (implement later)
   const top: Array<{ fid: number; followers: number }> = [];
 
-  const minted: string[] = [];
+  let minted = 0;
   for (const u of top.slice(0, 1000)) {
     try {
       const intelligence = intelligenceFromFollowers(u.followers);
       const rank = rankFromFollowers(u.followers);
       const persona = JSON.stringify({ archetype: 'squad', followers: u.followers, rank, intelligence });
-      const tokenId = await stSquadMintFromFarcaster(u.fid, u.followers, DEV_FID, intelligence, rank, persona);
-      minted.push(tokenId);
+      await stSquadMintFromFarcaster(u.fid, u.followers, DEV_FID, intelligence, rank, persona);
+      minted++;
     } catch (e) {
       console.warn('squad mint failed', u.fid, e);
     }
   }
 
-  return NextResponse.json({ ok: true, minted: minted.length });
+  return NextResponse.json({ ok: true, minted });
 }

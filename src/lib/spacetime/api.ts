@@ -340,10 +340,13 @@ export async function stNpcCreate(
   });
 }
 
-export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<string> {
+export async function stNpcMintToken(npcFid: number, ownerFid: number): Promise<void> {
   const r = await reducers() as any;
-  if (typeof r.npc_mint_token === 'function') return r.npc_mint_token(npcFid, ownerFid);
-  return callReducerCompat('npc_mint_token', [npcFid, ownerFid], { npcFid, ownerFid }) as any;
+  if (typeof r.npc_mint_token === 'function') {
+    await r.npc_mint_token(npcFid, ownerFid);
+    return;
+  }
+  await callReducerCompat('npc_mint_token', [npcFid, ownerFid], { npcFid, ownerFid });
 }
 
 export async function stSquadMintFromFarcaster(
@@ -353,14 +356,15 @@ export async function stSquadMintFromFarcaster(
   intelligenceScore: number,
   rank: string,
   personaJson: string,
-): Promise<string> {
+): Promise<void> {
   const r = await reducers() as any;
   if (typeof r.squad_mint_from_farcaster === 'function') {
-    return r.squad_mint_from_farcaster(sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson);
+    await r.squad_mint_from_farcaster(sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson);
+    return;
   }
-  return callReducerCompat('squad_mint_from_farcaster', [sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson], {
+  await callReducerCompat('squad_mint_from_farcaster', [sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson], {
     sourceFid, followers, ownerFid, intelligenceScore, rank, personaJson,
-  }) as any;
+  });
 }
 
 export async function stNpcUpdateState(npcFid: number, nextDecisionAtMs: number, budgetFbcWei: string): Promise<void> {
@@ -401,12 +405,15 @@ export async function stOfficialCreate(
   consistency: number,
   fitness: number,
   reputation: number,
-): Promise<string> {
+): Promise<void> {
   const r = await reducers() as any;
-  if (typeof r.official_create === 'function') return r.official_create(role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation);
-  return callReducerCompat('official_create', [role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation], {
+  if (typeof r.official_create === 'function') {
+    await r.official_create(role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation);
+    return;
+  }
+  await callReducerCompat('official_create', [role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation], {
     role, aiSeed, strictness, advantageTendency, offsideTolerance, varPropensity, consistency, fitness, reputation,
-  }) as any;
+  });
 }
 
 export async function stOfficialAssignToMatch(matchId: string, refereeId: string, assistantLeftId: string, assistantRightId: string, varId?: string | null): Promise<void> {
