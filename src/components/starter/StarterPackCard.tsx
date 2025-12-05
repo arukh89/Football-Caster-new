@@ -104,15 +104,25 @@ export function StarterPackCard(): JSX.Element | null {
       // Admin/Dev bypass: skip payment and directly verify
       if (isDev || isAdminWallet) {
         setStep('verifying');
-        const zeroHash = '0x' + '0'.repeat(64);
-        const res = await authFetch("/api/starter/verify", {
+        // Use admin grant endpoint instead of fake tx
+        let fid = identity?.fid;
+        if (!fid) {
+          // fetch from auth if identity not ready
+          const meRes = await authFetch('/api/auth/me');
+          if (meRes.ok) {
+            const me = await meRes.json();
+            fid = Number(me?.fid);
+          }
+        }
+        if (!fid) throw new Error('Unable to determine your FID');
+        const res = await authFetch("/api/admin/starter/grant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ txHash: zeroHash }),
+          body: JSON.stringify({ fid, wallet: account }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data?.error || "Verification failed");
+          throw new Error(data?.error || "Admin grant failed");
         }
         setStep('complete');
         await refreshStatus();
