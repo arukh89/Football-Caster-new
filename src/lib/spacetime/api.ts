@@ -11,6 +11,19 @@ function iso(ms: number | null | undefined): string | null {
   try { return new Date(ms!).toISOString(); } catch { return null; }
 }
 
+async function getReducer(name: string): Promise<(...args: any[]) => Promise<any>> {
+  const r: any = await reducers();
+  if (typeof r?.[name] === 'function') return r[name].bind(r);
+  if (typeof r?.get === 'function') {
+    const fn = r.get(name);
+    if (typeof fn === 'function') return fn;
+  }
+  if (typeof r?.call === 'function') {
+    return (...args: any[]) => r.call(name, ...args);
+  }
+  throw new Error(`Reducer ${name} not available`);
+}
+
 export async function stGetPlayersMine(fid: number): Promise<Player[]> {
   const st = await getSpacetime();
   const fidBig = BigInt(fid);
@@ -136,8 +149,8 @@ export async function stHasEnteredBefore(fid: number): Promise<boolean> {
 }
 
 export async function stGrantStarterPack(fid: number, players: any[]): Promise<void> {
-  const r = await reducers();
-  await r.grant_starter_pack(fid, JSON.stringify({ players }));
+  const fn = await getReducer('grant_starter_pack');
+  await fn(fid, JSON.stringify({ players }));
 }
 
 export async function stCreateListing(fid: number, itemId: string, priceFbcWei: string): Promise<any> {
@@ -284,8 +297,8 @@ export async function stIsTxUsed(txHash: string): Promise<boolean> {
  * Mark transaction as used (via reducer) - prevents replay attacks
  */
 export async function stMarkTxUsed(txHash: string, fid: number, endpoint: string): Promise<void> {
-  const r = await reducers();
-  await r.mark_tx_used(txHash, fid, endpoint);
+  const fn = await getReducer('mark_tx_used');
+  await fn(txHash, fid, endpoint);
 }
 
 // PvP reducers
