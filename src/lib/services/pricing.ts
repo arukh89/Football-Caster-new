@@ -814,21 +814,23 @@ export async function getFBCPrice(): Promise<PriceData> {
  * Uses integer math to avoid floating point errors
  */
 export function calculateFBCAmount(usdAmount: string, priceUsd: string): string {
-  const usd = parseFloat(usdAmount);
-  const price = parseFloat(priceUsd);
+  // Robust BigInt decimal math to avoid rounding to zero on tiny prices
+  const toScaled = (s: string, scale: number): bigint => {
+    const [i, f = ''] = String(s).trim().split('.');
+    const ii = (i || '0').replace(/[^0-9]/g, '');
+    const ff = f.replace(/[^0-9]/g, '');
+    const frac = (ff + '0'.repeat(scale)).slice(0, scale);
+    try { return BigInt(ii + frac); } catch { return 0n; }
+  };
 
-  if (isNaN(usd) || isNaN(price) || price <= 0) {
+  const usdScaled18 = toScaled(usdAmount, 18);     // usd * 1e18
+  const priceScaled18 = toScaled(priceUsd, 18);    // price * 1e18
+  if (usdScaled18 <= 0n || priceScaled18 <= 0n) {
     throw new Error('Invalid USD or price value');
   }
-
-  // Convert to wei: (usd / price) * 10^18
-  // Use BigInt for precision
-  // Convert to FBC with 18 decimals in wei:
-  // (usd / price) * 10^18
-  const usdWei = BigInt(Math.round(usd * 1e6)) * BigInt(1e12); // avoid float overflow
-  const priceWei = BigInt(Math.round(price * 1e6)) * BigInt(1e12);
-  const amountWei = usdWei * BigInt(1e18) / priceWei;
-
+  // amountWei = (usd * 1e18) / price
+  // Using scaled ints: (usdScaled18 * 1e18) / priceScaled18
+  const amountWei = (usdScaled18 * (10n ** 18n)) / priceScaled18;
   return amountWei.toString();
 }
 
