@@ -15,3 +15,5 @@ reliability-droid-report.html
 
 # Rust
 spacetime-server/rust/**/target/
+.vercel
+.env*.local
