@@ -780,16 +780,16 @@ export async function getFBCPrice(): Promise<PriceData> {
     if (priceUsd) source = 'uniswap_v3';
   }
 
+  // Dexscreener (prefer before 0x for this token's liquidity profile)
+  if (!priceUsd) {
+    priceUsd = await fetchFromDexscreener();
+    if (priceUsd) source = 'dexscreener';
+  }
+
   // 0x/Matcha (Base)
   if (!priceUsd) {
     priceUsd = await fetchFrom0x();
     if (priceUsd) source = '0x';
-  }
-
-  // Dexscreener
-  if (!priceUsd) {
-    priceUsd = await fetchFromDexscreener();
-    if (priceUsd) source = 'dexscreener';
   }
 
   // Uniswap v3 on-chain instantaneous (if TWAP unavailable)
