@@ -31,22 +31,22 @@ function toCamelCase(name: string): string {
 async function callReducerCompat(nameSnake: string, argsPositional: any[], argsNamed: Record<string, any>): Promise<any> {
   const r: any = await reducers();
   const camel = toCamelCase(nameSnake);
-  if (typeof r?.[camel] === 'function') {
-    const i64Keys = new Set([
-      'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid',
-      // NPC & squad related
-      'npcFid', 'userFid', 'aiSeed', 'sourceFid', 'followers', 'ownerFid',
-      // Misc durations that some reducers model as i64
-      'durationSeconds', 'nextDecisionAtMs', 'tsMs'
-    ]);
-    const transformed = Object.fromEntries(Object.entries(argsNamed).map(([k, v]) => {
-      if (i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return [k, BigInt(v)];
-      return [k, v];
-    }));
-    return r[camel](transformed);
-  }
-  if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...argsPositional);
-  if (typeof r?.call === 'function') return r.call(nameSnake, ...argsPositional);
+  const i64Keys = new Set([
+    'fid', 'buyerFid', 'sellerFid', 'winnerFid', 'challengerFid', 'challengedFid', 'accepterFid', 'reporterFid',
+    // NPC & squad related
+    'npcFid', 'userFid', 'aiSeed', 'sourceFid', 'followers', 'ownerFid',
+    // Misc durations that some reducers model as i64
+    'durationSeconds', 'nextDecisionAtMs', 'tsMs'
+  ]);
+  const orderedArgNames = Object.keys(argsNamed);
+  const positional = argsPositional.map((v, i) => {
+    const k = orderedArgNames[i];
+    if (k && i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return BigInt(v);
+    return v;
+  });
+  if (typeof r?.[camel] === 'function') return r[camel](...positional);
+  if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...positional);
+  if (typeof r?.call === 'function') return r.call(nameSnake, ...positional);
   throw new Error(`Reducer ${nameSnake} not available`);
 }
 
