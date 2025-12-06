@@ -59,17 +59,18 @@ export class SpacetimeClientBuilder {
       const Gen: any = await import('@/spacetime_module_bindings');
       if (Gen?.DbConnection?.builder) {
         console.info('[STDB] Using generated bindings DbConnection.builder()');
-        // Always connect by module name for stability across SDK versions
+        const builder = Gen.DbConnection.builder().withUri(this._uri);
+        // Prefer identity when provided and supported by SDK
+        if (isIdentity) {
+          if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName).build();
+          if (typeof builder.withDatabaseId === 'function') return builder.withDatabaseId(this._dbName).build();
+          if (typeof builder.withIdentity === 'function') return builder.withIdentity(this._dbName).build();
+        }
         const moduleName = sanitize(
           env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName,
           'footballcaster2'
         );
-        const conn = Gen.DbConnection
-          .builder()
-          .withUri(this._uri)
-          .withModuleName(moduleName)
-          .build();
-        return conn;
+        if (typeof builder.withModuleName === 'function') return builder.withModuleName(moduleName).build();
       }
     } catch {}
 
