@@ -44,9 +44,9 @@ async function callReducerCompat(nameSnake: string, argsPositional: any[], argsN
     if (k && i64Keys.has(k) && typeof v === 'number' && Number.isInteger(v)) return BigInt(v);
     return v;
   });
+  if (typeof r?.call === 'function') return r.call(nameSnake, ...positional);
   if (typeof r?.[camel] === 'function') return r[camel](...positional);
   if (typeof r?.[nameSnake] === 'function') return r[nameSnake](...positional);
-  if (typeof r?.call === 'function') return r.call(nameSnake, ...positional);
   throw new Error(`Reducer ${nameSnake} not available`);
 }
 
