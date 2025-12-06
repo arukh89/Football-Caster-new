@@ -12,6 +12,7 @@ tsconfig.tsbuildinfo
 
 # Reports / Artifacts
 reliability-droid-report.html
+test-results/
 
 # Rust
 spacetime-server/rust/**/target/
