@@ -1,14 +1,15 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/middleware/auth'
 import { getSpacetime } from '@/lib/spacetime/client'
 import { stGetPlayersMine } from '@/lib/spacetime/api'
+import { ok, cache, withErrorHandling } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     const st = await getSpacetime()
     const fid = ctx.fid
 
@@ -29,17 +30,12 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
       pending = !!match
     }
 
-    if (!match) {
-      return NextResponse.json(
-        { match: null },
-        { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
-      )
-    }
+    if (!match) return ok({ match: null }, { headers: cache.privateNoStore })
 
     const opponentFid: number = match.challenger_fid === fid ? match.challenged_fid : match.challenger_fid
     const opponentPlayers = await stGetPlayersMine(opponentFid)
 
-    return NextResponse.json(
+    return ok(
       {
         match: {
           id: match.id,
@@ -52,12 +48,9 @@ async function handler(req: NextRequest, ctx: { fid: number }): Promise<Response
         },
         opponent: { fid: opponentFid, players: opponentPlayers },
       },
-      { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } }
+      { headers: cache.privateNoStore }
     )
-  } catch (e) {
-    console.error('pvp/current error', e)
-    return NextResponse.json({ error: 'internal' }, { status: 500 })
-  }
+  })
 }
 
 export const GET = requireAuth(handler)

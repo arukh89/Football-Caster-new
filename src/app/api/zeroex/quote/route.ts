@@ -3,17 +3,18 @@
  * Server-side proxy to 0x Base API (bypasses browser CSP)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { ok, withErrorHandling, jsonError } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function HEAD(): Promise<Response> {
-  return new NextResponse(null, { status: 204 });
+  return new Response(null, { status: 204 });
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     const upstream = new URL('https://base.api.0x.org/swap/v1/quote');
     const sp = req.nextUrl.searchParams;
     // Forward all query params
@@ -30,15 +31,12 @@ export async function GET(req: NextRequest): Promise<Response> {
     const bodyText = await res.text();
     try {
       const json = JSON.parse(bodyText);
-      return NextResponse.json(json, { status: res.status });
+      return ok(json, { status: res.status });
     } catch {
-      return new NextResponse(bodyText, {
+      return new Response(bodyText, {
         status: res.status,
         headers: { 'content-type': res.headers.get('content-type') || 'text/plain' },
       });
     }
-  } catch (err) {
-    console.error('0x proxy error:', err);
-    return NextResponse.json({ error: 'Proxy fetch failed' }, { status: 502 });
-  }
+  });
 }

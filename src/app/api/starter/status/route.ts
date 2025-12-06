@@ -3,15 +3,16 @@
  * Returns whether the current user has claimed the starter pack
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { authenticate } from '@/lib/middleware/auth';
 import { stHasClaimedStarter } from '@/lib/spacetime/api';
+import { ok, unauthorized, withErrorHandling } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     // Prefer authenticated fid when available
     const ctx = await authenticate(req);
     let fid: number | null = ctx?.fid ?? null;
@@ -29,12 +30,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       if (Number.isFinite(fidParam)) fid = fidParam;
     }
 
-    if (!fid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!fid) return unauthorized();
 
     const hasClaimed = await stHasClaimedStarter(fid);
-    return NextResponse.json({ hasClaimed });
-  } catch (error) {
-    console.error('Starter status error:', error);
-    return NextResponse.json({ error: 'Failed to get status' }, { status: 500 });
-  }
+    return ok({ hasClaimed });
+  });
 }

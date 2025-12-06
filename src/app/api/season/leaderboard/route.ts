@@ -1,12 +1,13 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { getSpacetime } from '@/lib/spacetime/client'
+import { ok, cache, withErrorHandling } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export async function GET(req: NextRequest): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     const url = new URL(req.url)
     // Optional time window filters
     const fromMs = url.searchParams.get('fromMs') ? Number(url.searchParams.get('fromMs')) : null
@@ -57,9 +58,6 @@ export async function GET(req: NextRequest): Promise<Response> {
       b.points - a.points || b.w - a.w || a.l - b.l
     ))
 
-    return NextResponse.json({ leaderboard }, { headers: { 'Cache-Control': 'private, no-store, no-cache, must-revalidate' } })
-  } catch (e) {
-    console.error('season/leaderboard error', e)
-    return NextResponse.json({ error: 'internal' }, { status: 500 })
-  }
+    return ok({ leaderboard }, { headers: cache.privateNoStore })
+  })
 }

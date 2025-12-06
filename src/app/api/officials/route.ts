@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { getSpacetime } from '@/lib/spacetime/client'
+import { ok, cache } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,14 +62,14 @@ export async function GET(_req: NextRequest): Promise<Response> {
     } catch {}
 
     if (out.length === 0) {
-      return NextResponse.json({ officials: fallbackOfficials(), synthetic: true }, { headers: { 'Cache-Control': 'no-store' } })
+      return ok({ officials: fallbackOfficials(), synthetic: true }, { headers: cache.privateNoStore })
     }
     // Sort: referee first, then assistants, then var
     const order = { referee: 0, assistant_left: 1, assistant_right: 2, var: 3 } as Record<string, number>
     out.sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9))
-    return NextResponse.json({ officials: out, synthetic: false }, { headers: { 'Cache-Control': 'no-store' } })
+    return ok({ officials: out, synthetic: false }, { headers: cache.privateNoStore })
   } catch (e) {
     // Fallback to synthetic on error as well
-    return NextResponse.json({ officials: fallbackOfficials(), synthetic: true }, { headers: { 'Cache-Control': 'no-store' } })
+    return ok({ officials: fallbackOfficials(), synthetic: true }, { headers: cache.privateNoStore })
   }
 }

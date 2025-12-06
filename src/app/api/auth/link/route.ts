@@ -3,31 +3,21 @@
  * Link Farcaster FID to wallet address
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { stLinkWallet } from '@/lib/spacetime/api';
 import { validate, linkWalletSchema } from '@/lib/middleware/validation';
+import { withErrorHandling, validateBody, ok } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest): Promise<Response> {
-  try {
-    const body = await req.json();
-    const validation = validate(linkWalletSchema, body);
+  return withErrorHandling(async () => {
+    const parsed = await validateBody(req, linkWalletSchema);
+    if (!parsed.ok) return parsed.res;
 
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
-    }
-
-    const { fid, wallet } = validation.data;
+    const { fid, wallet } = parsed.data;
     await stLinkWallet(fid, wallet);
 
-    // Return simple bearer token for dev: "fid:wallet"
-    return NextResponse.json({ success: true, token: `${fid}:${wallet.toLowerCase()}`, fid, wallet: wallet.toLowerCase() });
-  } catch (error) {
-    console.error('Link wallet error:', error);
-    return NextResponse.json(
-      { error: 'Failed to link wallet' },
-      { status: 500 }
-    );
-  }
+    return ok({ success: true, token: `${fid}:${wallet.toLowerCase()}`, fid, wallet: wallet.toLowerCase() });
+  });
 }

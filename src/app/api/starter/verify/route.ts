@@ -3,13 +3,14 @@
  * Verify starter pack payment and grant pack
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import type { Address, Hash } from 'viem';
 import { stHasClaimedStarter, stGrantStarterPack, stIsTxUsed, stMarkTxUsed } from '@/lib/spacetime/api';
 import { verifyFBCTransfer } from '@/lib/services/verification';
 import { validate, verifyStarterSchema } from '@/lib/middleware/validation';
 import { requireAuth, isDevFID } from '@/lib/middleware/auth';
 import { randomUUID } from 'crypto';
+import { withErrorHandling, validateBody, ok, conflict, badRequest } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,11 +34,10 @@ function generateStarterPack(): Array<{ itemId: string; itemType: string; rating
 }
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
-  try {
-    const rawBody = await req.json().catch(() => ({}));
+  return withErrorHandling(async () => {
     const { fid, wallet } = ctx;
     const already = await stHasClaimedStarter(fid);
-    if (already) return NextResponse.json({ error: 'Starter already claimed' }, { status: 409 });
+    if (already) return conflict('Starter already claimed');
 
     // Admin/Dev bypass (no payment required):
     // - Dev FID
@@ -51,21 +51,17 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         position: null,
         rating: p.rating,
       })));
-      return NextResponse.json({ success: true, pack, bypass: true });
+      return ok({ success: true, pack, bypass: true });
     }
 
     // For non-bypass path, validate request body
-    const validation = validate(verifyStarterSchema, rawBody);
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
-    }
-    const { txHash } = validation.data;
+    const parsed = await validateBody(req, verifyStarterSchema);
+    if (!parsed.ok) return parsed.res;
+    const { txHash } = parsed.data;
 
     // Check for transaction replay attack
     const txUsed = await stIsTxUsed(txHash);
-    if (txUsed) {
-      return NextResponse.json({ error: 'Transaction hash already used' }, { status: 409 });
-    }
+    if (txUsed) return conflict('Transaction hash already used');
 
     // Verify payment
     const verification = await verifyFBCTransfer(
@@ -76,12 +72,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       true // allow any sender address (payer can be different from linked wallet)
     );
 
-    if (!verification.valid) {
-      return NextResponse.json(
-        { error: verification.error || 'Payment verification failed' },
-        { status: 400 }
-      );
-    }
+    if (!verification.valid) return badRequest(verification.error || 'Payment verification failed');
 
     // Mark transaction as used to prevent replay
     await stMarkTxUsed(txHash, fid, '/api/starter/verify');
@@ -95,14 +86,8 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       rating: p.rating,
     })));
 
-    return NextResponse.json({ success: true, pack });
-  } catch (error) {
-    console.error('Starter verify error:', error);
-    return NextResponse.json(
-      { error: 'Failed to verify payment' },
-      { status: 500 }
-    );
-  }
+    return ok({ success: true, pack });
+  });
 }
 
 export const POST = requireAuth(handler);

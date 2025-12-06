@@ -5,11 +5,10 @@
  * Returns 501 Not Implemented to indicate this is intentionally disabled.
  */
 
-import { NextResponse } from 'next/server';
+import { jsonError, withErrorHandling } from '@/lib/api/http';
 
-export async function POST(): Promise<NextResponse> {
-  return NextResponse.json(
-    { error: 'This endpoint is deprecated. Use /api/starter/verify for entry flow.' },
-    { status: 501 }
+export async function POST(): Promise<Response> {
+  return withErrorHandling(async () =>
+    jsonError('This endpoint is deprecated. Use /api/starter/verify for entry flow.', 501)
   );
 }
