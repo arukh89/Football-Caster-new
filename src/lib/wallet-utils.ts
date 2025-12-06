@@ -161,55 +161,6 @@ function encodeV3PathExactOutput(tokens: `0x${string}`[], fees: number[]): `0x${
   return ('0x' + hex) as `0x${string}`;
 }
 
-/**
- * Ensure FBC token allowance for a spender
- */
-export async function ensureAllowance(
-  walletClient: WalletClient,
-  publicClient: PublicClient,
-  spender: `0x${string}`,
-  minAmount: string
-): Promise<boolean> {
-  try {
-    const [account] = await walletClient.getAddresses();
-    if (!account) {
-      throw new Error('No account connected');
-    }
-
-    // Check current allowance using public client
-    const currentAllowance = await readContract(publicClient, {
-      address: CONTRACT_ADDRESSES.fbc,
-      abi: ERC20_ABI,
-      functionName: 'allowance',
-      args: [account, spender],
-    });
-
-    const minAmountBigInt = BigInt(minAmount);
-
-    // If allowance is sufficient, return true
-    if (currentAllowance >= minAmountBigInt) {
-      return true;
-    }
-
-    // Request approval
-    const hash = await walletClient.writeContract({
-      address: CONTRACT_ADDRESSES.fbc,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [spender, minAmountBigInt],
-      account,
-      chain: base,
-    });
-
-    // Wait for transaction confirmation
-    await waitForTransactionReceipt(publicClient, { hash });
-
-    return true;
-  } catch (err) {
-    console.error('Allowance error:', err);
-    throw err;
-  }
-}
 
 /**
  * Pay in FBC tokens
@@ -418,10 +369,6 @@ export async function payInFBC(
   }
 }
 
-/**
- * Send FBC tokens (alias for payInFBC)
- */
-export const sendFBC = payInFBC;
 
 /**
  * Format FBC amount from wei to readable format
@@ -437,11 +384,4 @@ export function parseFBC(amount: string): string {
   return parseUnits(amount, 18).toString();
 }
 
-/**
- * Calculate fee amount
- */
-export function calculateFee(amount: string, feeBps: number): string {
-  const amountBigInt = BigInt(amount);
-  const fee = (amountBigInt * BigInt(feeBps)) / BigInt(10000);
-  return fee.toString();
-}
+// (calculateFee, ensureAllowance removed as unused)
