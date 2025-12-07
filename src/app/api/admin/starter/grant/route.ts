@@ -12,6 +12,7 @@ import type { Address } from 'viem';
 import { recoverMessageAddress, isAddressEqual } from 'viem';
 import { randomUUID } from 'crypto';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
+import { withErrorHandling, validateBody, ok, badRequest, forbidden, conflict } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ function generateStarterPack(): Array<{ player_id: string; name: string | null; 
 }
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     // Preflight: ensure reducer exists on the connected module
     try {
       const r: any = await stReducers();
@@ -59,32 +60,23 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         );
       }
     } catch (e) {
-      return NextResponse.json(
-        { error: 'Failed to connect to SpacetimeDB', detail: (e as Error)?.message || String(e) },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to connect to SpacetimeDB', detail: (e as Error)?.message || String(e) }, { status: 500 });
     }
     // Parse input
-    const body = await req.json().catch(() => ({}));
-    const validation = validate(adminGrantStarterSchema, body);
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
-    }
-
-    const { fid, wallet, signature, message } = validation.data as { fid: number; wallet?: string; signature?: `0x${string}`; message?: string };
+    const parsed = await validateBody(req, adminGrantStarterSchema);
+    if (!parsed.ok) return parsed.res;
+    const { fid, wallet, signature, message } = parsed.data as { fid: number; wallet?: string; signature?: `0x${string}`; message?: string };
 
     // Authorization: require admin signature unless dev FID
     const isAdmin = isAdminFID(ctx.fid);
     if (!isAdmin) {
-      if (!signature || !message) {
-        return NextResponse.json({ error: 'Missing admin signature' }, { status: 400 });
-      }
+      if (!signature || !message) return badRequest('Missing admin signature');
       try {
         const recovered = await recoverMessageAddress({ message, signature });
         const ok = isAddressEqual(recovered as Address, CONTRACT_ADDRESSES.treasury as Address);
-        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (!ok) return forbidden('Forbidden');
       } catch (e) {
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+        return badRequest('Invalid signature');
       }
     }
 
@@ -103,10 +95,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       if (msg.includes('starter_already_claimed')) {
         alreadyClaimed = true;
       } else {
-        return NextResponse.json(
-          { error: 'Grant reducer failed', detail: msg },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Grant reducer failed', detail: msg }, { status: 500 });
       }
     }
 
@@ -116,18 +105,14 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
     } catch (e) {
       const msg = (e as Error)?.message || String(e);
       if (msg.includes('insufficient_npc_pool')) {
-        return NextResponse.json({ error: 'insufficient_npc_pool', detail: 'Not enough NPCs available to assign 18' }, { status: 409 });
+        return conflict('insufficient_npc_pool');
       }
       // soft-fail other errors
       console.warn('NPC assign failed:', msg);
     }
 
-    return NextResponse.json({ success: true, fid, linkedWallet: wallet || null, playersGranted: alreadyClaimed ? 0 : players.length, npcsAssigned: 18, alreadyClaimed });
-  } catch (error) {
-    console.error('Admin grant starter error:', error);
-    const msg = (error as Error)?.message || String(error);
-    return NextResponse.json({ error: 'Failed to grant starter pack', detail: msg }, { status: 500 });
-  }
+    return ok({ success: true, fid, linkedWallet: wallet || null, playersGranted: alreadyClaimed ? 0 : players.length, npcsAssigned: 18, alreadyClaimed });
+  });
 }
 
 export const POST = requireAuth(handler);

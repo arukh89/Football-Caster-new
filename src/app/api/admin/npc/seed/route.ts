@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { requireAuth, type AuthContext } from '@/lib/middleware/auth'
 import { stNpcCreate } from '@/lib/spacetime/api'
+import { withErrorHandling, ok, forbidden } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,11 +25,11 @@ function isAdminFID(fid: number): boolean {
 }
 
 async function handler(req: NextRequest, ctx: AuthContext): Promise<Response> {
-  if (!isAdminFID(ctx.fid)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
+  return withErrorHandling(async () => {
+    if (!isAdminFID(ctx.fid)) {
+      return forbidden('forbidden')
+    }
 
-  try {
     const body = (await req.json().catch(() => ({}))) as SeedBody
     const count = Math.max(1, Math.min(500, Number(body.count ?? 50)))
     const startFid = Number.isFinite(Number(body.startFid)) ? Number(body.startFid) : 900_000_000
@@ -56,10 +57,8 @@ async function handler(req: NextRequest, ctx: AuthContext): Promise<Response> {
     }
 
     const okCount = results.filter(r => r.ok).length
-    return NextResponse.json({ ok: true, createdOrUpdated: okCount, attempted: count, startFid, difficultyTier })
-  } catch (e) {
-    return NextResponse.json({ error: 'internal' }, { status: 500 })
-  }
+    return ok({ ok: true, createdOrUpdated: okCount, attempted: count, startFid, difficultyTier })
+  })
 }
 
 export const POST = requireAuth(handler)

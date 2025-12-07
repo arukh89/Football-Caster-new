@@ -1,17 +1,12 @@
-import { NextResponse } from 'next/server';
+import { ok, jsonError, withErrorHandling } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  try {
+  return withErrorHandling(async () => {
     const { getSpacetime } = await import('@/lib/spacetime/client');
     await getSpacetime();
-    return NextResponse.json({ status: 'healthy', spacetime: 'connected' });
-  } catch (error: any) {
-    return NextResponse.json(
-      { status: 'unhealthy', error: String(error?.message || error) },
-      { status: 503 }
-    );
-  }
+    return ok({ status: 'healthy', spacetime: 'connected' });
+  });
 }

@@ -1,15 +1,16 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/middleware/auth'
 import type { AuthContext } from '@/lib/middleware/auth'
 import { stOfficialAssignToMatch } from '@/lib/spacetime/api'
+import { withErrorHandling, badRequest, ok } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
-  try {
-    const body = await req.json().catch(() => ({})) as any
+  return withErrorHandling(async () => {
+    const body = (await req.json().catch(() => ({}))) as any
     const matchId = typeof body?.matchId === 'string' ? body.matchId : null
     const refereeId = String(body?.refereeId || '')
     const assistantLeftId = String(body?.assistantLeftId || '')
@@ -17,7 +18,7 @@ async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
     const varId = body?.varId ? String(body.varId) : null
 
     if (!refereeId || !assistantLeftId || !assistantRightId) {
-      return NextResponse.json({ error: 'missing_official_ids' }, { status: 400 })
+      return badRequest('missing_official_ids')
     }
 
     if (matchId) {
@@ -29,11 +30,8 @@ async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
       }
     }
 
-    return NextResponse.json({ ok: true })
-  } catch (e) {
-    console.error('officials/assign error', e)
-    return NextResponse.json({ error: 'internal' }, { status: 500 })
-  }
+    return ok({ ok: true })
+  })
 }
 
 export const POST = requireAuth(handler)

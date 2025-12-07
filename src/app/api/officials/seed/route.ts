@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/middleware/auth'
 import type { AuthContext } from '@/lib/middleware/auth'
 import { stOfficialCreate } from '@/lib/spacetime/api'
+import { withErrorHandling, ok } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ async function tryCreate(role: string) {
 }
 
 async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
-  try {
+  return withErrorHandling(async () => {
     const countParam = Number((await req.json().catch(() => ({})))?.count ?? 4)
     const wantsVar = countParam >= 4
     const results: any[] = []
@@ -37,10 +38,8 @@ async function handler(req: NextRequest, _ctx: AuthContext): Promise<Response> {
     results.push(await tryCreate('assistant_left'))
     results.push(await tryCreate('assistant_right'))
     if (wantsVar) results.push(await tryCreate('var'))
-    return NextResponse.json({ ok: true, attempted: results.length })
-  } catch (e) {
-    return NextResponse.json({ error: 'internal' }, { status: 500 })
-  }
+    return ok({ ok: true, attempted: results.length })
+  })
 }
 
 export const POST = requireAuth(handler)

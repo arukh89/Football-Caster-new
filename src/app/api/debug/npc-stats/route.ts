@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server'
+import { ok, withErrorHandling } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  try {
+  return withErrorHandling(async () => {
     const { getSpacetime, getEnv, reducers } = await import('@/lib/spacetime/client')
     const st: any = await getSpacetime()
     const r: any = await reducers()
@@ -17,13 +17,6 @@ export async function GET() {
     const inventoryNpcItems = Array.from(st.db.inventoryItem.iter()).filter((x: any) => x.itemType === 'npc_manager').length
 
     const reducerKeys = Object.getOwnPropertyNames(r).filter((k) => typeof (r as any)[k] === 'function')
-    return NextResponse.json({
-      ok: true,
-      env,
-      counts: { userNpcCount, npcRegistryCount, assignmentCount, inventoryNpcItems },
-      reducerKeys,
-    })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })
-  }
+    return ok({ ok: true, env, counts: { userNpcCount, npcRegistryCount, assignmentCount, inventoryNpcItems }, reducerKeys })
+  })
 }
