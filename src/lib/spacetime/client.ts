@@ -16,14 +16,8 @@ function sanitize(input: string | undefined, fallback: string): string {
 
 // Read env dynamically so hot-reload picks up .env.local changes without full restart
 function readEnv(): { URI: string; DB_NAME: string; FALLBACK_URI?: string; FALLBACK_URIS?: string[]; DEV_FALLBACK?: boolean } {
-  const URI = sanitize(
-    env.STDB_URI || env.SPACETIME_URI || env.NEXT_PUBLIC_SPACETIME_URI,
-    'wss://maincloud.spacetimedb.com'
-  );
-  const DB_NAME = sanitize(
-    env.STDB_DBNAME || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME,
-    'footballcaster2'
-  );
+  const URI = sanitize(env.NEXT_PUBLIC_SPACETIME_URI, 'wss://maincloud.spacetimedb.com');
+  const DB_NAME = sanitize(env.NEXT_PUBLIC_SPACETIME_DB_NAME, 'footballcaster2');
   const FALLBACK_URI = sanitize(env.STDB_FALLBACK_URI, 'ws://127.0.0.1:3100');
   const FALLBACK_URIS = [FALLBACK_URI, 'ws://127.0.0.1:3000', 'ws://127.0.0.1:3001', 'ws://127.0.0.1:3002'];
   const DEV_FALLBACK = (env.ENABLE_DEV_FALLBACK || '').toLowerCase() === 'true';
@@ -67,10 +61,7 @@ export class SpacetimeClientBuilder {
           // As a last resort, some SDKs overload withDatabaseName to accept identity
           if (typeof builder.withDatabaseName === 'function') return builder.withDatabaseName(this._dbName).build();
         }
-        const moduleName = sanitize(
-          env.SPACETIME_MODULE || env.SPACETIME_DB_NAME || env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName,
-          'footballcaster2'
-        );
+        const moduleName = sanitize(env.NEXT_PUBLIC_SPACETIME_DB_NAME || this._dbName, 'footballcaster2');
         if (typeof builder.withModuleName === 'function') return builder.withModuleName(moduleName).build();
       }
     } catch {}

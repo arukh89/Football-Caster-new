@@ -13,7 +13,7 @@ const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
 const USDC_DEFAULTS: `0x${string}`[] = [
   '0x833589fCD6edb6E08f4c7C76f99918fCae4f2dE0',
 ];
-const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || process.env.USDC_ADDRESSES || '')
+const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];

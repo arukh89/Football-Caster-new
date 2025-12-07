@@ -9,20 +9,15 @@ import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens/0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
-const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || process.env.PRICE_URL || '';
+const CUSTOM_PRICE_URL = process.env.NEXT_PUBLIC_PRICE_URL || '';
 const OX_PRICE_URL = 'https://base.api.0x.org/swap/v1/price';
 // Optional manual override for local/dev: set any of these envs to a positive number
-const PRICE_OVERRIDE_ENV =
-  process.env.NEXT_PUBLIC_FBC_PRICE_USD ||
-  process.env.NEXT_PUBLIC_PRICE_OVERRIDE ||
-  process.env.FBC_PRICE_USD ||
-  process.env.PRICE_OVERRIDE_USD ||
-  process.env.PRICE_OVERRIDE;
+const PRICE_OVERRIDE_ENV = process.env.NEXT_PUBLIC_FBC_PRICE_USD;
 // USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
 const USDC_DEFAULTS: `0x${string}`[] = [
   '0x833589fcd6edb6e08f4c7c76f99918fcae4f2de0',
 ];
-const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || process.env.USDC_ADDRESSES || '')
+const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
@@ -34,11 +29,11 @@ const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
 
 // Uniswap V4 PoolManager (Base) – configurable via env
 const UNISWAP_V4_POOL_MANAGER: `0x${string}` = (
-  (process.env.NEXT_PUBLIC_UNISWAP_V4_POOL_MANAGER || process.env.UNISWAP_V4_POOL_MANAGER || '0x498581fF718922c3f8e6A244956aF099B2652b2b')
+  (process.env.NEXT_PUBLIC_UNISWAP_V4_POOL_MANAGER || '0x498581fF718922c3f8e6A244956aF099B2652b2b')
 ) as `0x${string}`;
 // Optional known PoolId (bytes32) for FBC/WETH on v4
 const UNISWAP_V4_FBC_WETH_POOL_ID: `0x${string}` | null = (() => {
-  const s = process.env.NEXT_PUBLIC_UNISWAP_V4_FBC_WETH_POOL_ID || process.env.UNISWAP_V4_FBC_WETH_POOL_ID || '';
+  const s = process.env.NEXT_PUBLIC_UNISWAP_V4_FBC_WETH_POOL_ID || '';
   return /^0x[a-fA-F0-9]{64}$/.test(s.trim()) ? (s.trim() as `0x${string}`) : null;
 })();
 
@@ -336,7 +331,7 @@ async function fetchFromUniswapV3Onchain(): Promise<string | null> {
 }
 
 const TWAP_SECONDS: number = (() => {
-  const raw = Number(process.env.NEXT_PUBLIC_TWAP_SECONDS || process.env.TWAP_SECONDS || '600');
+  const raw = Number(process.env.NEXT_PUBLIC_TWAP_SECONDS || '600');
   if (!isFinite(raw) || raw <= 0) return 600;
   return Math.min(Math.max(Math.floor(raw), 60), 3600); // clamp 1m..60m
 })();
@@ -518,7 +513,7 @@ async function usdPerWethFromV3Twap(seconds = TWAP_SECONDS): Promise<string | nu
 
 // Optional lookback override for v4 TWAP (in blocks)
 const V4_TWAP_LOOKBACK_BLOCKS: number = (() => {
-  const raw = Number(process.env.NEXT_PUBLIC_V4_TWAP_LOOKBACK_BLOCKS || process.env.V4_TWAP_LOOKBACK_BLOCKS || '');
+  const raw = Number(process.env.NEXT_PUBLIC_V4_TWAP_LOOKBACK_BLOCKS || '');
   if (!isFinite(raw) || raw <= 0) return 20000; // sensible default window on Base
   return Math.min(Math.max(Math.floor(raw), 500), 200000);
 })();
