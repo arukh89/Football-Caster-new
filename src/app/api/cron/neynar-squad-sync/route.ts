@@ -1,37 +1,27 @@
 import { NextResponse } from 'next/server';
 import { stSquadMintFromFarcaster } from '@/lib/spacetime/api';
+import { fetchTopFarcasterUsers } from '@/lib/services/neynar';
+import { calculateRankFromFollowers, calculateIntelligenceFromFollowers } from '@/lib/neynar/score';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function intelligenceFromFollowers(followers: number): number {
-  const score = Math.ceil(20 + 15 * Math.log10(followers + 1));
-  return Math.max(70, Math.min(99, score));
-}
-
-function rankFromFollowers(followers: number): 'S' | 'A' | 'B' | 'C' | 'D' {
-  if (followers >= 1_000_000) return 'S';
-  if (followers >= 250_000) return 'A';
-  if (followers >= 50_000) return 'B';
-  if (followers >= 10_000) return 'C';
-  return 'D';
-}
+// Scoring is centralized in lib/neynar/score
 
 export async function GET(): Promise<Response> {
   const key = process.env.NEYNAR_API_KEY || process.env.FARCASTER_API_KEY;
   const DEV_FID = Number(process.env.NEXT_PUBLIC_DEV_FID || '250704');
   if (!key) return new NextResponse('missing NEYNAR_API_KEY', { status: 400 });
 
-  // Placeholder: fetch top users from Neynar (implement later)
-  const top: Array<{ fid: number; followers: number }> = [];
+  const users = await fetchTopFarcasterUsers(250);
 
   let minted = 0;
-  for (const u of top.slice(0, 1000)) {
+  for (const u of users.slice(0, 1000)) {
     try {
-      const intelligence = intelligenceFromFollowers(u.followers);
-      const rank = rankFromFollowers(u.followers);
+      const intelligence = calculateIntelligenceFromFollowers(u.followers || 0);
+      const rank = calculateRankFromFollowers(u.followers || 0);
       const persona = JSON.stringify({ archetype: 'squad', followers: u.followers, rank, intelligence });
-      await stSquadMintFromFarcaster(u.fid, u.followers, DEV_FID, intelligence, rank, persona);
+      await stSquadMintFromFarcaster(u.fid, u.followers || 0, DEV_FID, intelligence, rank, persona);
       minted++;
     } catch (e) {
       console.warn('squad mint failed', u.fid, e);

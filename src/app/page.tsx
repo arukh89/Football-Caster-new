@@ -22,6 +22,7 @@ import { useAddMiniApp } from "@/hooks/useAddMiniApp";
 import { useQuickAuth } from "@/hooks/useQuickAuth";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
 import { logger } from '@/lib/log';
+import { OpenInWarpcastCTA } from '@/components/OpenInWarpcastCTA';
 
 export default function HomePage(): JSX.Element {
   const { addMiniApp } = useAddMiniApp();
@@ -180,6 +181,7 @@ export default function HomePage(): JSX.Element {
                 <div className="text-sm text-muted-foreground">
                   Welcome! You are browsing in web mode.
                 </div>
+                <OpenInWarpcastCTA />
                 {!wallet.isConnected ? (
                   <Button size="lg" onClick={connect} className="gap-2 h-14 text-lg championship-button" aria-label="Connect Wallet">
                     Connect Wallet
