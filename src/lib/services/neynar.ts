@@ -1,4 +1,5 @@
 import { env } from 'process';
+import { calculateRankFromFollowers, calculateIntelligenceFromFollowers } from '@/lib/neynar/score';
 
 export interface NeynarUser {
   fid: number;
@@ -112,19 +113,5 @@ export async function fetchFarcasterUser(fid: number): Promise<NeynarUser | null
   return out;
 }
 
-export function rankFromFollowers(followers: number | null | undefined): string {
-  const f = followers || 0;
-  if (f >= 100_000) return 'S';
-  if (f >= 50_000) return 'A';
-  if (f >= 10_000) return 'B';
-  if (f >= 1000) return 'C';
-  return 'D';
-}
-
-export function intelligenceFromFollowers(followers: number | null | undefined): number {
-  const f = followers || 0;
-  const capped = Math.min(100_000, Math.max(0, f));
-  // Map 0..100k => 30..95 (arbitrary but bounded)
-  const x = 30 + Math.round((capped / 100_000) * 65);
-  return Math.max(0, Math.min(100, x));
-}
+export const rankFromFollowers = (followers: number | null | undefined) => calculateRankFromFollowers(followers);
+export const intelligenceFromFollowers = (followers: number | null | undefined) => calculateIntelligenceFromFollowers(followers);
