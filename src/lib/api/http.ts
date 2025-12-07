@@ -6,6 +6,11 @@ export function ok<T>(data: T, init?: ResponseInit): Response {
   return NextResponse.json({ success: true, data } as any, init);
 }
 
+export function noContent(init?: ResponseInit): Response {
+  const resInit: ResponseInit = { status: 204, ...(init || {}) };
+  return new Response(null, resInit);
+}
+
 export function jsonError(message: string, status: number): Response {
   return NextResponse.json({ success: false, error: message }, { status });
 }

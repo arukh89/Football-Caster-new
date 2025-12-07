@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { type NextRequest } from 'next/server'
+import { noContent } from '@/lib/api/http'
 
 export const runtime = 'nodejs'
 
@@ -36,13 +37,10 @@ function corsHeaders(req: NextRequest): Record<string, string> {
 }
 
 export async function OPTIONS(req: NextRequest): Promise<Response> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders(req) })
+  return noContent({ headers: corsHeaders(req) })
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
   // No-op sink to avoid third-party analytics CORS/CORB issues
-  const res = new NextResponse(null, { status: 204 })
-  const headers = corsHeaders(req)
-  for (const [k, v] of Object.entries(headers)) res.headers.set(k, v)
-  return res
+  return noContent({ headers: corsHeaders(req) })
 }
