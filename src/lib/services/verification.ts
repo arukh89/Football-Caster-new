@@ -7,7 +7,7 @@ import { base } from 'viem/chains';
 import { getFBCPrice, calculateFBCAmount } from './pricing';
 
 const FBC_ADDRESS = (process.env.NEXT_PUBLIC_FBC_ADDRESS as Address) || '0xcb6e9f9bab4164eaa97c982dee2d2aaffdb9ab07';
-const RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+const RPC_URL = process.env.NEXT_PUBLIC_BASE_RPC_URL || 'https://mainnet.base.org';
 
 function normalizeAddress(addr: Address): Address {
   return addr.toLowerCase() as Address;
