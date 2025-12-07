@@ -17,12 +17,13 @@ export const revalidate = 0;
 
 async function ensureNeynarBootstrap(): Promise<void> {
   try {
-    // Only run when we have zero squad listings
+    // Only run when we have zero squad listings (auto-refill when stock is empty)
     const existing = await stListActiveListings();
     const anySquad = existing.some((l: any) => l.itemType === 'squad');
     if (anySquad) return;
 
-    const users = await fetchTopFarcasterUsers(1000);
+    // Seed 250 initial squads from Neynar
+    const users = await fetchTopFarcasterUsers(250);
     if (!users.length) return;
 
     // Mint squads and list them at a nominal fixed price (e.g., 5 FBC)

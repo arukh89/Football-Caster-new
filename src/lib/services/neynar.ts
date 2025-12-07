@@ -71,6 +71,47 @@ export async function fetchTopFarcasterUsers(limit = 1000): Promise<NeynarUser[]
   return out;
 }
 
+export async function fetchFarcasterUser(fid: number): Promise<NeynarUser | null> {
+  const key = getKey();
+  if (!key || !Number.isInteger(fid) || fid <= 0) return null;
+  const base = getBase();
+  const headers = {
+    accept: 'application/json',
+    api_key: key,
+  } as Record<string, string>;
+
+  const urls = [
+    `${base}/v2/farcaster/user?fid=${fid}`,
+    `${base}/v2/farcaster/users?fids=${fid}`,
+    `${base}/v2/farcaster/user/by_id?fid=${fid}`,
+  ];
+
+  let data: any = null;
+  for (const url of urls) {
+    data = await tryJson(url, headers);
+    if (data) break;
+  }
+  if (!data) return null;
+
+  const u = Array.isArray(data)
+    ? data.find((x: any) => Number(x?.fid ?? x?.user?.fid) === fid)
+    : Array.isArray(data.users)
+      ? data.users.find((x: any) => Number(x?.fid ?? x?.user?.fid) === fid)
+      : data.user || data.result || data.data || data;
+
+  if (!u) return null;
+
+  const out: NeynarUser = {
+    fid: Number(u.fid ?? u.user?.fid ?? fid),
+    username: u.username ?? u.user?.username ?? null,
+    display_name: u.display_name ?? u.user?.display_name ?? null,
+    bio: u.profile?.bio?.text ?? u.bio ?? null,
+    followers: Number(u.follower_count ?? u.followers ?? u.stats?.followers ?? 0) || null,
+  };
+  if (!Number.isInteger(out.fid) || out.fid <= 0) return null;
+  return out;
+}
+
 export function rankFromFollowers(followers: number | null | undefined): string {
   const f = followers || 0;
   if (f >= 100_000) return 'S';
