@@ -3,7 +3,7 @@
  * Admin-only: grant starter pack to a target FID (optionally link wallet first)
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { requireAuth, isAdminFID } from '@/lib/middleware/auth';
 import { stHasClaimedStarter, stGrantStarterPack, stLinkWallet, stNpcAssignForUser, stSquadMintFromFarcaster } from '@/lib/spacetime/api';
 import { fetchFarcasterUser, rankFromFollowers, intelligenceFromFollowers } from '@/lib/services/neynar';
@@ -11,28 +11,20 @@ import { reducers as stReducers, getEnv, getSpacetime } from '@/lib/spacetime/cl
 import { adminGrantStarterSchema, validate } from '@/lib/middleware/validation';
 import type { Address } from 'viem';
 import { recoverMessageAddress, isAddressEqual } from 'viem';
-import { randomUUID } from 'crypto';
+import { generateStarterPack } from '@/lib/starter/generate';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
-import { withErrorHandling, validateBody, ok, badRequest, forbidden, conflict } from '@/lib/api/http';
+import { withErrorHandling, validateBody, ok, badRequest, forbidden, conflict, serverError } from '@/lib/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function generateStarterPack(): Array<{ player_id: string; name: string | null; position: string | null; rating: number }> {
-  const players: Array<{ player_id: string; name: string | null; position: string | null; rating: number }> = [];
-  for (let i = 0; i < 18; i++) {
-    players.push({
-      player_id: `player-${randomUUID()}`,
-      name: null,
-      position: null,
-      rating: Math.floor(Math.random() * 30) + 60,
-    });
-  }
-  return players;
-}
+// generateStarterPack moved to shared util
 
 async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): Promise<Response> {
   return withErrorHandling(async () => {
+    if (process.env.ENABLE_ADMIN_ENDPOINTS !== 'true') {
+      return forbidden('Admin endpoints disabled');
+    }
     // Preflight: ensure reducer exists on the connected module
     try {
       const r: any = await stReducers();
@@ -49,19 +41,10 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
         )
       );
       if (!ok) {
-        return NextResponse.json(
-          {
-            error: 'Reducer grant_starter_pack not available on SpacetimeDB module.',
-            hint: 'Check DB name/URI and deployed schema.',
-            env: { uri: URI, dbName: DB_NAME },
-            availableReducers: reducerKeys,
-            availableTables: tableKeys,
-          },
-          { status: 500 }
-        );
+        return serverError('Reducer grant_starter_pack not available on SpacetimeDB module.');
       }
     } catch (e) {
-      return NextResponse.json({ error: 'Failed to connect to SpacetimeDB', detail: (e as Error)?.message || String(e) }, { status: 500 });
+      return serverError('Failed to connect to SpacetimeDB');
     }
     // Parse input
     const parsed = await validateBody(req, adminGrantStarterSchema);
@@ -96,7 +79,7 @@ async function handler(req: NextRequest, ctx: { fid: number; wallet: string }): 
       if (msg.includes('starter_already_claimed')) {
         alreadyClaimed = true;
       } else {
-        return NextResponse.json({ error: 'Grant reducer failed', detail: msg }, { status: 500 });
+        return serverError('Grant reducer failed');
       }
     }
 

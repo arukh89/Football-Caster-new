@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { ok, jsonError } from '@/lib/api/http';
 import { stPlayerStateRecoverTick, stPlayerAgeTick } from '@/lib/spacetime/api';
 
 export const runtime = 'nodejs';
@@ -11,9 +11,9 @@ export async function GET(): Promise<Response> {
     if (process.env.PLAYER_AGE_TICK === 'true') {
       await stPlayerAgeTick();
     }
-    return NextResponse.json({ ok: true, now });
+    return ok({ now });
   } catch (e) {
-    // Reducers are stubs for now; swallow errors in early phases
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    // Standardized error response
+    return jsonError((e as Error)?.message || 'Internal error', 500);
   }
 }
