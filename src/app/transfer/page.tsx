@@ -96,7 +96,7 @@ export default function TransfersPage(): JSX.Element {
                     />
                   </div>
                   <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectTrigger className="w-full md:w-[180px]" aria-label="Sort listings">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>

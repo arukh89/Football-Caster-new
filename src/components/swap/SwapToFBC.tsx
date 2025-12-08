@@ -212,7 +212,7 @@ export function SwapToFBC(): JSX.Element {
             <div className="grid gap-1">
               <Label>Pay with</Label>
               <Select value={sellToken.id} onValueChange={(v) => { const t = TOKENS.find(t => t.id === v as any)!; setSellToken(t); setQuote(null); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Select pay token"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TOKENS.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                 </SelectContent>

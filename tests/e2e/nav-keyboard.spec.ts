@@ -14,7 +14,7 @@ test.describe('Navigation keyboard accessibility', () => {
   });
 
   test('desktop nav marks current page (desktop only)', async ({ page }) => {
-    await page.goto('/market');
+    await page.goto('/market', { waitUntil: 'domcontentloaded' });
     const vp = page.viewportSize();
     if (!vp || vp.width < 768) test.skip();
     const nav = page.getByRole('navigation', { name: /Primary Desktop/i });

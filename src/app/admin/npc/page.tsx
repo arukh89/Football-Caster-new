@@ -158,7 +158,7 @@ export default function AdminNpcPage(): JSX.Element {
                 <Label>Sort</Label>
                 <div className="flex gap-2">
                   <Select value={sort} onValueChange={(v) => { setPage(1); setSort(v as any); }}>
-                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Sort" /></SelectTrigger>
+                    <SelectTrigger className="w-[140px]" aria-label="Sort NPC list"><SelectValue placeholder="Sort" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="lastActive">Last Active</SelectItem>
                       <SelectItem value="fid">FID</SelectItem>
@@ -167,7 +167,7 @@ export default function AdminNpcPage(): JSX.Element {
                     </SelectContent>
                   </Select>
                   <Select value={order} onValueChange={(v) => { setPage(1); setOrder(v as any); }}>
-                    <SelectTrigger className="w-[110px]"><SelectValue placeholder="Order" /></SelectTrigger>
+                    <SelectTrigger className="w-[110px]" aria-label="Order direction"><SelectValue placeholder="Order" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="desc">Desc</SelectItem>
                       <SelectItem value="asc">Asc</SelectItem>
@@ -185,7 +185,7 @@ export default function AdminNpcPage(): JSX.Element {
                 <div className="flex items-center gap-2">
                   <Label htmlFor="pageSize">Per page</Label>
                   <Select value={String(pageSize)} onValueChange={(v) => { setPage(1); setPageSize(parseInt(v, 10)); }}>
-                    <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-[90px]" aria-label="Items per page"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="10">10</SelectItem>
                       <SelectItem value="25">25</SelectItem>
