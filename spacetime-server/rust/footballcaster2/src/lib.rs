@@ -867,7 +867,7 @@ pub fn official_create(
         reputation,
         ai_seed,
         active: true,
-        last_assigned_ms: 0,
+        last_assigned_ms: now,
     });
 }
 
