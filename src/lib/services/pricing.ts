@@ -1,10 +1,11 @@
 /**
  * Pricing Service - FBC/USD price fetching
  * Sources priority:
- *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → GeckoTerminal → Uniswap v3 on-chain → Custom URL
+ *   V4 Quoter strict (if NEXT_PUBLIC_V4_PRICE_ONLY) → GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → Uniswap v3 on-chain → Custom URL
  */
 
 import { CONTRACT_ADDRESSES, CHAIN_CONFIG, TOKEN_ADDRESSES, USDC_ADDRESSES } from '@/lib/constants';
+import { getUsdPerFbcViaQuoterStrict } from '@/lib/services/uniswapV4';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
@@ -36,6 +37,11 @@ const UNISWAP_V4_POOL_MANAGER: `0x${string}` = (
 const UNISWAP_V4_FBC_WETH_POOL_ID: `0x${string}` | null = (() => {
   const s = process.env.NEXT_PUBLIC_UNISWAP_V4_FBC_WETH_POOL_ID || '';
   return /^0x[a-fA-F0-9]{64}$/.test(s.trim()) ? (s.trim() as `0x${string}`) : null;
+})();
+
+const V4_PRICE_ONLY: boolean = (() => {
+  const v = (process.env.NEXT_PUBLIC_V4_PRICE_ONLY || '').toString().trim().toLowerCase();
+  return v === '1' || v === 'true';
 })();
 
 interface PriceData {
@@ -790,6 +796,16 @@ async function fetchFromCustom(): Promise<string | null> {
 export async function getFBCPrice(): Promise<PriceData> {
   // Return cached price if valid
   if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_TTL) {
+    return cachedPrice;
+  }
+
+  // Strict path: use only V4 Quoter → USD conversion, no fallbacks
+  if (V4_PRICE_ONLY) {
+    if (!UNISWAP_V4_FBC_WETH_POOL_ID) {
+      throw new Error('V4 strict mode enabled but poolId is not configured');
+    }
+    const priceUsd = await getUsdPerFbcViaQuoterStrict(UNISWAP_V4_FBC_WETH_POOL_ID);
+    cachedPrice = { priceUsd, source: 'uniswap_v4', timestamp: Date.now() };
     return cachedPrice;
   }
 
