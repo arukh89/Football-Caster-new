@@ -128,7 +128,7 @@ export default function SquadPage(): JSX.Element {
               <div className="flex flex-col">
                 <div className="text-xs text-muted-foreground mb-1">Formation</div>
                 <Select value={selectedFormation} onValueChange={setSelectedFormation}>
-                  <SelectTrigger className="h-8 text-sm font-bold">
+                  <SelectTrigger className="h-8 text-sm font-bold" aria-label="Select formation">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

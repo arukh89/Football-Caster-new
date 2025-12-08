@@ -99,7 +99,7 @@ export default function CreateAuctionPage(): JSX.Element {
                     <UserSearch className="h-4 w-4" /> Select Player
                   </div>
                   <Select value={selectedId} onValueChange={setSelectedId}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Select player">
                       <SelectValue placeholder="Choose player" />
                     </SelectTrigger>
                     <SelectContent>

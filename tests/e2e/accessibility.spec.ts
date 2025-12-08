@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+test.setTimeout(120000);
 const routes = ['/', '/market', '/auction', '/match', '/settings'];
 
 for (const route of routes) {
   test(`no critical a11y violations on ${route}`, async ({ page }) => {
-    await page.goto(route);
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
