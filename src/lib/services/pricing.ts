@@ -1,10 +1,11 @@
 /**
  * Pricing Service - FBC/USD price fetching
  * Sources priority:
- *   Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → GeckoTerminal → Uniswap v3 on-chain → Custom URL
+ *   V4 Quoter strict (if NEXT_PUBLIC_V4_PRICE_ONLY) → GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → Uniswap v3 on-chain → Custom URL
  */
 
-import { CONTRACT_ADDRESSES, CHAIN_CONFIG } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, CHAIN_CONFIG, TOKEN_ADDRESSES, USDC_ADDRESSES } from '@/lib/constants';
+import { getUsdPerFbcViaQuoterStrict } from '@/lib/services/uniswapV4';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
@@ -21,18 +22,9 @@ const ASSUME_ONE_USD: boolean = (
     .toLowerCase()
     .trim() !== 'false'
 );
-// USDC on Base (official). Allow extending via env (comma-separated addresses) without hardcoding unknowns.
-const USDC_DEFAULTS: `0x${string}`[] = [
-  // Native USDC on Base (correct address)
-  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-];
-const USDC_ENV = (process.env.NEXT_PUBLIC_USDC_ADDRESSES || '')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter((s) => /^0x[a-fA-F0-9]{40}$/.test(s)) as `0x${string}`[];
-// Prefer env-provided addresses first, then fall back to defaults
-const USDC_BASES: `0x${string}`[] = Array.from(new Set([...USDC_ENV, ...USDC_DEFAULTS]));
-const WETH_BASE: `0x${string}` = '0x4200000000000000000000000000000000000006';
+// Centralized addresses
+const USDC_BASES: readonly `0x${string}`[] = USDC_ADDRESSES;
+const WETH_BASE: `0x${string}` = TOKEN_ADDRESSES.weth;
 // Uniswap V3 Factory on Base (per official deployments)
 const UNISWAP_V3_FACTORY: `0x${string}` = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
 const V3_FEE_TIERS: number[] = [100, 500, 3000, 10000];
@@ -45,6 +37,11 @@ const UNISWAP_V4_POOL_MANAGER: `0x${string}` = (
 const UNISWAP_V4_FBC_WETH_POOL_ID: `0x${string}` | null = (() => {
   const s = process.env.NEXT_PUBLIC_UNISWAP_V4_FBC_WETH_POOL_ID || '';
   return /^0x[a-fA-F0-9]{64}$/.test(s.trim()) ? (s.trim() as `0x${string}`) : null;
+})();
+
+const V4_PRICE_ONLY: boolean = (() => {
+  const v = (process.env.NEXT_PUBLIC_V4_PRICE_ONLY || '').toString().trim().toLowerCase();
+  return v === '1' || v === 'true';
 })();
 
 interface PriceData {
@@ -799,6 +796,16 @@ async function fetchFromCustom(): Promise<string | null> {
 export async function getFBCPrice(): Promise<PriceData> {
   // Return cached price if valid
   if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_TTL) {
+    return cachedPrice;
+  }
+
+  // Strict path: use only V4 Quoter → USD conversion, no fallbacks
+  if (V4_PRICE_ONLY) {
+    if (!UNISWAP_V4_FBC_WETH_POOL_ID) {
+      throw new Error('V4 strict mode enabled but poolId is not configured');
+    }
+    const priceUsd = await getUsdPerFbcViaQuoterStrict(UNISWAP_V4_FBC_WETH_POOL_ID);
+    cachedPrice = { priceUsd, source: 'uniswap_v4', timestamp: Date.now() };
     return cachedPrice;
   }
 
