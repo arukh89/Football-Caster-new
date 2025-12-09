@@ -2,6 +2,14 @@
 const nextConfig = {
   transpilePackages: ['spacetimedb'],
   async headers() {
+    const scriptSrc = [
+      "'self'",
+      "'unsafe-eval'",
+      "'unsafe-inline'",
+      // Allow Vercel Live script so realtime feedback doesn't trip CSP
+      'https://vercel.live',
+    ].join(' ');
+
     return [
       {
         source: '/:path*',
@@ -10,7 +18,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
@@ -28,6 +36,12 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, immutable, no-transform, max-age=300' },
         ],
       },
+    ];
+  },
+  async rewrites() {
+    return [
+      // Map default browser request to SVG favicon we ship in /public
+      { source: '/favicon.ico', destination: '/favicon.svg' },
     ];
   },
 };
