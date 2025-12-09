@@ -1,7 +1,7 @@
 /**
  * Pricing Service - FBC/USD price fetching
  * Sources priority:
- *   V4 Quoter strict (if NEXT_PUBLIC_V4_PRICE_ONLY) → GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → 0x/Matcha → Dexscreener → Uniswap v3 on-chain → Custom URL
+ *   V4 Quoter strict (if NEXT_PUBLIC_V4_PRICE_ONLY) → 0x (primary) → GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → Dexscreener → Uniswap v3 on-chain → Custom URL
  */
 
 import { CONTRACT_ADDRESSES, CHAIN_CONFIG, TOKEN_ADDRESSES, USDC_ADDRESSES } from '@/lib/constants';
@@ -829,13 +829,13 @@ export async function getFBCPrice(): Promise<PriceData> {
     return cachedPrice;
   }
 
-  // Prefer: GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → 0x → Dexscreener → Custom
+  // Prefer: 0x (primary) → GeckoTerminal → Uniswap v4 TWAP → Uniswap v3 TWAP → Dexscreener → Custom
   let priceUsd: string | null = null;
   let source: 'dexscreener' | 'gecko' | 'custom' | '0x' | 'uniswap_v3' | 'uniswap_v4' | 'override' = 'dexscreener';
 
-  // GeckoTerminal (try first - has actual FBC pool data)
-  priceUsd = await fetchFromGeckoTerminal();
-  if (priceUsd) source = 'gecko';
+  // 0x aggregator (primary)
+  priceUsd = await fetchFrom0x();
+  if (priceUsd) source = '0x';
 
   // Uniswap v4 TWAP (if PoolId configured)
   if (!priceUsd) {
@@ -849,10 +849,10 @@ export async function getFBCPrice(): Promise<PriceData> {
     if (priceUsd) source = 'uniswap_v3';
   }
 
-  // 0x/Matcha (Base)
+  // GeckoTerminal
   if (!priceUsd) {
-    priceUsd = await fetchFrom0x();
-    if (priceUsd) source = '0x';
+    priceUsd = await fetchFromGeckoTerminal();
+    if (priceUsd) source = 'gecko';
   }
 
   // Dexscreener
