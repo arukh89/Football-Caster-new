@@ -18,6 +18,7 @@ export default function RootLayout({
             <html lang="en" className={inter.variable}>
               <head>
                 <meta name="fc:miniapp:manifest" content="/.well-known/farcaster.json" />
+                <link rel="icon" href="/favicon.svg" sizes="any" />
               </head>
               <body className="min-h-screen bg-background font-sans antialiased championship-gradient">
                 <ErrorBoundary>
